@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Meeting | ระบบจัดการประชุมอัจฉริยะ</title>
+
+<!-- ฟอนต์ภาษาไทย: Kanit ใช้กับหัวข้อ/โลโก้, Noto Sans Thai ใช้กับเนื้อหาทั่วไป -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ===================== DESIGN TOKENS ===================== */
+  :root{
+    --ink:#1F2A44;         /* กรมท่า - ใช้กับ header/แถบเข้ม */
+    --ink-2:#2B3A5C;
+    --bg:#F5F4EF;          /* พื้นหลังหน้าเว็บ โทนครีมอมเทา */
+    --surface:#FFFFFF;
+    --border:#E4E1D6;
+    --text:#232323;
+    --text-muted:#6B6A63;
+    --accent:#2F6F63;      /* เขียวหมอก - สีหลัก (ยืนยัน/ว่าง/ปุ่มหลัก) */
+    --accent-dark:#24564C;
+    --accent-soft:#E4EFEA;
+    --gold:#C98A2C;        /* ทอง - รอดำเนินการ/แจ้งเตือน */
+    --gold-soft:#FBF0DD;
+    --danger:#B3432E;      /* อิฐแดง - ไม่ว่าง/ปฏิเสธ */
+    --danger-soft:#F6E7E2;
+    --info:#3C6E9C;
+    --info-soft:#E7EFF6;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Noto Sans Thai', sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.font-display{ font-family:'Kanit', sans-serif; }
+
+  /* ===================== APP FRAME =====================
+     ปรับขนาดตามอุปกรณ์จริง (responsive):
+     - จอมือถือ/หน้าต่างแคบ: เต็มความกว้าง/สูงของหน้าจอเครื่องนั้นๆ
+     - จอคอม/แท็บเล็ต (>=640px): ขยายเป็นการ์ดกว้างขึ้น ใช้พื้นที่จอคุ้มค่าขึ้น
+       แต่ไม่กว้างเกินไปจนอ่านยาก (จำกัดไว้ที่ประมาณ 820px) */
+  .app-shell{
+    display:flex;
+    justify-content:center;
+    min-height:100vh;
+    padding:0;
+  }
+  .phone{
+    background:var(--surface);
+    width:100%;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  @media (min-width:640px){
+    .app-shell{ align-items:center; padding:28px 16px; }
+    .phone{
+      width:min(94vw, 820px);
+      height:min(92vh, 900px);
+      border-radius:20px;
+      box-shadow:0 16px 50px rgba(0,0,0,.18);
+      overflow:hidden;
+    }
+  }
+  .screen{
+    background:var(--surface);
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    position:relative;
+  }
+
+  /* ===================== HEADER ===================== */
+  .app-header{
+    background:var(--ink);
+    color:#fff;
+    padding:20px 20px 16px;
+    flex-shrink:0;
+  }
+  .app-header .eyebrow{ font-size:13px; color:#B9C2D6; margin:0 0 2px; }
+  .app-header h1{ font-size:22px; font-weight:600; margin:0; color:#fff; }
+  .back-btn{
+    background:none;border:none;color:#B9C2D6;font-size:14px;
+    font-family:'Noto Sans Thai',sans-serif; cursor:pointer;padding:0;margin-bottom:10px;
+    display:flex;align-items:center;gap:4px;
+  }
+
+  /* ===================== CONTENT AREA ===================== */
+  .content{ flex:1; overflow-y:auto; padding-bottom:90px; -webkit-overflow-scrolling:touch; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+  .pad{ padding:18px 20px; }
+
+  /* ===================== COMPONENTS ===================== */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px;
+  }
+  .section-title{ font-size:15px; font-weight:600; margin:0 0 10px; color:var(--text); }
+
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
+  .stat-card{ background:var(--accent-soft); border-radius:var(--radius); padding:14px; }
+  .stat-card .num{ font-family:'Kanit',sans-serif; font-size:26px; font-weight:600; color:var(--accent-dark); line-height:1.1; }
+  .stat-card .label{ font-size:12.5px; color:var(--text-muted); margin-top:4px; }
+  /* จอกว้าง (คอม/แท็บเล็ต) มีที่พอ เลยเรียงการ์ดสรุปเป็น 4 คอลัมน์ในแถวเดียว
+     (ต้องมาหลังกฎด้านบนในไฟล์ เพราะ specificity เท่ากัน ลำดับ CSS จึงมีผล) */
+  @media (min-width:900px){
+    .stat-grid{ grid-template-columns:repeat(4,1fr); }
+  }
+
+  .list{ border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .list-item{
+    display:flex; align-items:center; gap:12px; padding:14px 16px;
+    border-bottom:1px solid var(--border); cursor:pointer; background:var(--surface);
+  }
+  .list-item:last-child{ border-bottom:none; }
+  .list-item:active{ background:var(--bg); }
+  .list-item .ttl{ font-size:14.5px; font-weight:500; margin:0; }
+  .list-item .sub{ font-size:12.5px; color:var(--text-muted); margin:2px 0 0; }
+
+  .badge{ font-size:11.5px; padding:4px 10px; border-radius:20px; font-weight:500; white-space:nowrap; }
+  .badge-accent{ background:var(--accent-soft); color:var(--accent-dark); }
+  .badge-gold{ background:var(--gold-soft); color:#8A5E1B; }
+  .badge-danger{ background:var(--danger-soft); color:var(--danger); }
+  .badge-info{ background:var(--info-soft); color:var(--info); }
+
+  label{ display:block; font-size:13px; color:var(--text-muted); margin-bottom:5px; }
+  input[type=text], input[type=password], input[type=date], input[type=time], select, textarea{
+    width:100%; height:42px; border:1px solid var(--border); border-radius:10px;
+    padding:0 12px; margin-bottom:14px; font-family:inherit; font-size:14px;
+    background:var(--surface); color:var(--text);
+  }
+  textarea{ height:auto; padding:10px 12px; resize:vertical; }
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    height:44px; border-radius:10px; border:none; font-family:'Noto Sans Thai',sans-serif;
+    font-size:14.5px; font-weight:600; cursor:pointer; width:100%;
+  }
+  .btn-primary{ background:var(--ink); color:#fff; }
+  .btn-primary:active{ background:var(--ink-2); }
+  .btn-accent{ background:var(--accent); color:#fff; }
+  .btn-accent:active{ background:var(--accent-dark); }
+  .btn-outline{ background:#fff; border:1px solid var(--border); color:var(--text); }
+  .btn-danger-outline{ background:#fff; border:1px solid var(--danger); color:var(--danger); }
+  .btn-sm{ height:36px; font-size:13px; }
+  .btn:disabled{ opacity:.6; cursor:default; }
+
+  .seg{ display:flex; gap:8px; margin-bottom:14px; }
+  .seg button{
+    flex:1; height:40px; border-radius:10px; font-family:inherit; font-size:13.5px;
+    border:1px solid var(--border); background:#fff; color:var(--text); cursor:pointer;
+  }
+  .seg button.active{ border:2px solid var(--accent); background:var(--accent-soft); color:var(--accent-dark); font-weight:600; }
+
+  .chip{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; background:var(--bg); border:1px solid var(--border); padding:5px 10px; border-radius:20px; }
+  .chip button{ background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:13px; line-height:1; padding:0; }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:14px; min-height:44px; }
+  .chip-row input{ border:none; flex:1; min-width:100px; height:auto; margin:0; padding:4px; }
+
+  .empty{ text-align:center; padding:40px 20px; color:var(--text-muted); font-size:13.5px; }
+
+  /* ===================== BOTTOM NAV ===================== */
+  #bottom-nav{
+    position:absolute; left:0; right:0; bottom:0;
+    background:#fff; border-top:1px solid var(--border);
+    display:flex; justify-content:space-around; align-items:center;
+    height:76px; padding-bottom:14px;
+  }
+  #bottom-nav button{
+    background:none; border:none; cursor:pointer; padding:6px 10px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    color:var(--text-muted); font-family:'Noto Sans Thai',sans-serif; font-size:10.5px;
+  }
+  #bottom-nav button svg{ width:22px; height:22px; stroke-width:1.8; }
+  #bottom-nav button.active{ color:var(--accent-dark); font-weight:600; }
+  #bottom-nav .hidden-admin-only{ display:none; }
+
+  /* ===================== MISC ===================== */
+  .role-card{
+    display:flex; align-items:center; gap:14px; padding:16px; border:1px solid var(--border);
+    border-radius:var(--radius); margin-bottom:12px; cursor:pointer; background:#fff;
+  }
+  .role-card:active{ background:var(--bg); }
+  .role-card .ic{ width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--accent-soft);color:var(--accent-dark);flex-shrink:0; }
+  .role-card .ttl{ font-weight:600; font-size:15px; margin:0; }
+  .role-card .sub{ font-size:12.5px; color:var(--text-muted); margin:2px 0 0; }
+
+  .spinner{
+    width:34px;height:34px;border-radius:50%;
+    border:3px solid var(--border); border-left-color:var(--accent);
+    animation:spin 0.8s linear infinite; margin:0 auto;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .toast{
+    position:absolute; left:20px; right:20px; bottom:96px;
+    background:var(--ink); color:#fff; padding:12px 16px; border-radius:12px;
+    font-size:13.5px; display:none; align-items:center; gap:8px; z-index:50;
+  }
+
+  /* ===================== NOTIFICATIONS ===================== */
+  .header-top-row{ display:flex; align-items:flex-start; justify-content:space-between; }
+  .bell-btn{
+    position:relative; background:rgba(255,255,255,.12); border:none; border-radius:10px;
+    width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+    color:#fff; cursor:pointer; flex-shrink:0;
+  }
+  .bell-btn svg{ width:18px; height:18px; }
+  .bell-dot{
+    position:absolute; top:5px; right:6px; width:8px; height:8px; border-radius:50%;
+    background:var(--danger); border:1.5px solid var(--ink); display:none;
+  }
+  .notif-panel{
+    position:absolute; inset:0; background:rgba(0,0,0,.35); z-index:60; display:none;
+  }
+  .notif-panel.open{ display:block; }
+  .notif-sheet{
+    position:absolute; left:12px; right:12px; top:70px; max-height:70%; overflow-y:auto;
+    background:#fff; border-radius:var(--radius); box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  .notif-item{ padding:12px 14px; border-bottom:1px solid var(--border); font-size:13px; }
+  .notif-item:last-child{ border-bottom:none; }
+  .notif-item .t{ margin:0 0 3px; font-weight:600; color:var(--text); }
+  .notif-item .m{ margin:0; color:var(--text-muted); font-size:12.5px; }
+
+  /* ===================== QR PATTERN (จำลองลาย QR) ===================== */
+  .qr-pattern{
+    width:200px; height:200px; margin:20px auto; border-radius:16px; background:#fff;
+    border:8px solid #1F2A44; display:grid; grid-template-columns:repeat(11,1fr);
+    grid-template-rows:repeat(11,1fr); gap:2px; padding:8px; box-sizing:border-box;
+  }
+  .qr-pattern .cell{ background:transparent; border-radius:1px; }
+  .qr-pattern .cell.on{ background:#1F2A44; }
+
+  /* ===================== DASHBOARD MINI (admin overview) ===================== */
+  .util-bar{ height:8px; border-radius:6px; background:var(--border); overflow:hidden; margin-top:6px; }
+  .util-bar > div{ height:100%; background:var(--accent); border-radius:6px; }
+
+  /* ===================== detail action buttons ===================== */
+  .detail-actions{ display:flex; gap:8px; margin-top:14px; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="phone">
+    <div class="screen" id="screen">
+
+      <!-- ================= TOAST (ข้อความแจ้งเตือนสั้นๆ) ================= -->
+      <div class="toast" id="toast"></div>
+
+      <!-- ================= NOTIFICATION PANEL ================= -->
+      <div class="notif-panel" id="notif-panel" onclick="if(event.target===this) toggleNotifPanel()">
+        <div class="notif-sheet" id="notif-sheet"></div>
+      </div>
+
+      <div class="content" id="content">
+
+        <!-- ============================================================
+             VIEW 0: LOGIN
+             ระบบยืนยันตัวตนจริง: กรอกชื่อผู้ใช้ + รหัสผ่าน ตรวจกับฐานข้อมูล
+             (ดู server/routes/auth.js) — บทบาท (role) ถูกกำหนดไว้ตอนสมัครสมาชิก
+             และเซิร์ฟเวอร์เป็นคนบอกว่า user นี้เป็นบทบาทอะไร ผู้ใช้ไม่ต้องเลือกเอง
+        ============================================================= -->
+        <div class="view active" id="login-view">
+          <div class="app-header">
+            <p class="eyebrow">Smart Meeting Management System</p>
+            <h1>เข้าสู่ระบบ</h1>
+          </div>
+          <div class="pad">
+            <label>ชื่อผู้ใช้</label>
+            <input type="text" id="login-username" placeholder="เช่น organizer1" autocomplete="username">
+
+            <label>รหัสผ่าน</label>
+            <input type="password" id="login-password" placeholder="รหัสผ่าน" autocomplete="current-password">
+
+            <button class="btn btn-accent" onclick="submitLogin()" style="margin-top:4px;">เข้าสู่ระบบ</button>
+
+            <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:16px;">
+              ยังไม่มีบัญชี?
+              <span style="color:var(--accent-dark);font-weight:600;cursor:pointer;" onclick="navigateTo('register-view')">สมัครสมาชิก</span>
+            </p>
+
+            <div class="card" style="margin-top:24px;background:var(--accent-soft);border:none;">
+              <p class="sub" style="margin:0 0 6px;font-weight:600;">บัญชีทดสอบ (เดโม)</p>
+              <p class="sub" style="margin:0;">employee1 / organizer1 / admin1 — รหัสผ่าน demo1234</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 0.5: สมัครสมาชิก
+             เลือกบทบาทตอนสมัครครั้งเดียว ระบบจะจำไว้ในฐานข้อมูล ไม่ต้องเลือกซ้ำทุกครั้งที่เข้าสู่ระบบ
+        ============================================================= -->
+        <div class="view" id="register-view">
+          <div class="app-header">
+            <button class="back-btn" onclick="navigateTo('login-view')">&larr; ย้อนกลับ</button>
+            <h1>สมัครสมาชิก</h1>
+          </div>
+          <div class="pad">
+            <label>ชื่อ-นามสกุล</label>
+            <input type="text" id="reg-name" placeholder="เช่น สมชาย ใจดี">
+
+            <label>ชื่อผู้ใช้ (username)</label>
+            <input type="text" id="reg-username" placeholder="ตั้งชื่อผู้ใช้สำหรับเข้าสู่ระบบ" autocomplete="username">
+
+            <label>รหัสผ่าน</label>
+            <input type="password" id="reg-password" placeholder="อย่างน้อย 4 ตัวอักษร" autocomplete="new-password">
+
+            <label>ยืนยันรหัสผ่าน</label>
+            <input type="password" id="reg-confirm" placeholder="พิมพ์รหัสผ่านอีกครั้ง" autocomplete="new-password">
+
+            <label>บทบาทของฉัน</label>
+            <div class="seg" id="reg-role-seg">
+              <button type="button" data-val="employee" class="active" onclick="pickSeg('reg-role-seg', this)">พนักงาน</button>
+              <button type="button" data-val="organizer" onclick="pickSeg('reg-role-seg', this)">ผู้จัดประชุม</button>
+              <button type="button" data-val="admin" onclick="pickSeg('reg-role-seg', this)">แอดมิน</button>
+            </div>
+
+            <button class="btn btn-accent" onclick="submitRegister()">สมัครสมาชิก</button>
+
+            <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:16px;">
+              มีบัญชีอยู่แล้ว?
+              <span style="color:var(--accent-dark);font-weight:600;cursor:pointer;" onclick="navigateTo('login-view')">เข้าสู่ระบบ</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 1: HOME / DASHBOARD
+        ============================================================= -->
+        <div class="view" id="home-view">
+          <div class="app-header">
+            <div class="header-top-row">
+              <div>
+                <p class="eyebrow" id="home-role-label">พนักงาน</p>
+                <h1>ภาพรวมวันนี้</h1>
+              </div>
+              <button class="bell-btn" onclick="toggleNotifPanel()" aria-label="การแจ้งเตือน">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span class="bell-dot" id="bell-dot"></span>
+              </button>
+            </div>
+          </div>
+          <div class="pad">
+            <div class="stat-grid">
+              <div class="stat-card">
+                <div class="num" id="stat-meetings">-</div>
+                <div class="label">การประชุมวันนี้</div>
+              </div>
+              <div class="stat-card">
+                <div class="num" id="stat-rooms">-</div>
+                <div class="label">ห้องว่าง</div>
+              </div>
+              <div class="stat-card">
+                <div class="num" id="stat-checkin">-</div>
+                <div class="label">เช็คอินแล้ว</div>
+              </div>
+              <div class="stat-card">
+                <div class="num" id="stat-pending">-</div>
+                <div class="label">รออนุมัติ</div>
+              </div>
+            </div>
+
+            <p class="section-title">การประชุมที่กำลังจะมาถึง</p>
+            <div class="list" id="upcoming-list"></div>
+
+            <p class="section-title" style="margin-top:18px;">สถานะห้องประชุม</p>
+            <div class="list" id="room-status-list"></div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 2: MY MEETINGS (รายการประชุมของฉัน)
+        ============================================================= -->
+        <div class="view" id="meetings-view">
+          <div class="app-header">
+            <h1>การประชุมของฉัน</h1>
+          </div>
+          <div class="pad">
+            <div class="list" id="meetings-list"></div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 3: MEETING DETAIL
+        ============================================================= -->
+        <div class="view" id="meeting-detail-view">
+          <div class="app-header">
+            <button class="back-btn" onclick="navigateTo('meetings-view')">&larr; ย้อนกลับ</button>
+            <h1 id="detail-title">รายละเอียดการประชุม</h1>
+          </div>
+          <div class="pad" id="detail-body"></div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 4: จองห้องประชุม / สร้างการประชุม
+             ใช้ฟอร์มเดียวกัน เพราะการสร้างการประชุมแบบ Onsite/Hybrid
+             ต้องจองห้องไปพร้อมกัน (ตาม ER Diagram: Meeting 1 - 0..1 Booking)
+        ============================================================= -->
+        <div class="view" id="create-view">
+          <div class="app-header">
+            <button class="back-btn" onclick="navigateTo('home-view')">&larr; ย้อนกลับ</button>
+            <h1>สร้างการประชุมใหม่</h1>
+          </div>
+          <div class="pad">
+            <label>ชื่อการประชุม</label>
+            <input type="text" id="f-title" placeholder="เช่น ประชุมทีม Marketing">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div><label>วันที่</label><input type="date" id="f-date"></div>
+              <div><label>เวลาเริ่ม</label><input type="time" id="f-time"></div>
+            </div>
+
+            <label>รูปแบบการประชุม</label>
+            <div class="seg" id="type-seg">
+              <button type="button" data-val="Onsite" class="active" onclick="pickSeg('type-seg', this)">Onsite</button>
+              <button type="button" data-val="Online" onclick="pickSeg('type-seg', this)">Online</button>
+              <button type="button" data-val="Hybrid" onclick="pickSeg('type-seg', this)">Hybrid</button>
+            </div>
+
+            <div id="room-field">
+              <label>ห้องประชุม</label>
+              <select id="f-room"></select>
+            </div>
+
+            <div id="link-field" style="display:none;">
+              <label>ลิงก์ประชุมออนไลน์</label>
+              <input type="text" id="f-link" placeholder="เช่น https://meet.google.com/xxx-yyyy">
+            </div>
+
+            <label>ระดับความลับ</label>
+            <select id="f-confidential">
+              <option value="ทั่วไป">ทั่วไป (เห็นได้ทุกคน)</option>
+              <option value="ลับเฉพาะผู้เข้าร่วม">ลับเฉพาะผู้เข้าร่วม</option>
+            </select>
+
+            <label>ผู้เข้าร่วม</label>
+            <div class="chip-row" id="participant-chips">
+              <input type="text" id="participant-input" placeholder="พิมพ์ชื่อแล้วกด Enter">
+            </div>
+
+            <button class="btn btn-accent" onclick="submitCreateMeeting()">
+              <span id="create-btn-label">ส่งคำขอจองและสร้างการประชุม</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 5: QR CHECK-IN
+             จำลองการสแกน QR ด้วยการเรียก API จริง (ไม่มีกล้องจริง)
+        ============================================================= -->
+        <div class="view" id="checkin-view">
+          <div class="app-header">
+            <h1>เช็คอินด้วย QR</h1>
+          </div>
+          <div class="pad" style="text-align:center;">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
+              ยื่นโทรศัพท์สแกน QR หน้าห้องประชุม
+            </p>
+            <div id="qr-box"></div>
+
+            <select id="checkin-meeting-select" style="margin-bottom:16px;" onchange="renderQrBox()"></select>
+
+            <button class="btn btn-primary" id="scan-btn" onclick="simulateCheckin()">
+              จำลองการสแกน QR
+            </button>
+
+            <div id="checkin-result" style="margin-top:18px;"></div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 6: ADMIN - Dashboard สรุปผล + อนุมัติการจองห้อง
+        ============================================================= -->
+        <div class="view" id="admin-view">
+          <div class="app-header">
+            <p class="eyebrow">แอดมิน</p>
+            <h1>Dashboard สรุปผล</h1>
+          </div>
+          <div class="pad">
+            <div class="stat-grid">
+              <div class="stat-card">
+                <div class="num" id="adm-stat-total">-</div>
+                <div class="label">การประชุมทั้งหมด</div>
+              </div>
+              <div class="stat-card">
+                <div class="num" id="adm-stat-pending">-</div>
+                <div class="label">รออนุมัติ</div>
+              </div>
+              <div class="stat-card">
+                <div class="num" id="adm-stat-cancelled">-</div>
+                <div class="label">ยกเลิก/ปฏิเสธ</div>
+              </div>
+              <div class="stat-card">
+                <div class="num" id="adm-stat-checkin">-</div>
+                <div class="label">อัตราเช็คอินเฉลี่ย</div>
+              </div>
+            </div>
+
+            <p class="section-title">การใช้งานห้องประชุม</p>
+            <div class="card" style="margin-bottom:18px;">
+              <div id="admin-room-util"></div>
+            </div>
+
+            <p class="section-title">คำขอจองห้องที่รออนุมัติ</p>
+            <div class="list" id="admin-pending-list"></div>
+          </div>
+        </div>
+
+      </div><!-- /content -->
+
+      <!-- ================= BOTTOM NAV ================= -->
+      <nav id="bottom-nav" style="display:none;">
+        <button data-target="home-view" onclick="navigateTo('home-view')">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1V10M9 9h6v11H9V9z"/></svg>
+          หน้าแรก
+        </button>
+        <button data-target="meetings-view" onclick="navigateTo('meetings-view')">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          ประชุม
+        </button>
+        <button data-target="create-view" onclick="openCreateMeeting()" class="admin-hide-create">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          สร้างใหม่
+        </button>
+        <button data-target="checkin-view" onclick="navigateTo('checkin-view')" id="nav-checkin">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h6m-3-3v6"/></svg>
+          เช็คอิน
+        </button>
+        <button data-target="admin-view" onclick="navigateTo('admin-view')" id="nav-admin" class="hidden-admin-only">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          อนุมัติ
+        </button>
+        <button onclick="logout()">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          ออกจากระบบ
+        </button>
+      </nav>
+
+    </div><!-- /screen -->
+  </div><!-- /phone -->
+</div><!-- /app-shell -->
+
+
+<script>
+/* ==========================================================================
+   ตัวช่วยเรียก API (fetch) — คุยกับ backend จริงใน server/ ผ่าน REST API
+   ทุกครั้งที่หน้าเว็บต้องอ่าน/แก้ข้อมูล จะยิง request มาที่ Express แล้ว
+   Express ไปอ่าน/เขียนไฟล์ฐานข้อมูล SQLite (smart_meeting.db) อีกที
+========================================================================== */
+async function api(method, url, body){
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  const res = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* ไม่มี body ก็ไม่เป็นไร */ }
+  if (!res.ok) throw new Error((data && data.error) || `เรียก ${url} ไม่สำเร็จ`);
+  return data;
+}
+
+/* ==========================================================================
+   สถานะฝั่ง client — เป็นแค่ "แคช" ของข้อมูลที่โหลดมาจากเซิร์ฟเวอร์ล่าสุด
+   ไม่ใช่ข้อมูลจริงอีกต่อไป (ข้อมูลจริงอยู่ในไฟล์ smart_meeting.db)
+========================================================================== */
+const TOKEN_STORAGE_KEY = 'smartMeetingToken'; // เก็บ token ไว้ใน localStorage เพื่อไม่ต้อง login ใหม่ทุกครั้งที่เปิดเว็บ
+let authToken = null;     // token ที่ได้จาก POST /api/auth/login หรือ /api/auth/register
+let currentRole = null;   // 'employee' | 'organizer' | 'admin' — เซิร์ฟเวอร์เป็นคนกำหนดจากบัญชีที่สมัครไว้ ไม่ใช่ผู้ใช้เลือกเอง
+let currentUser = null;   // { user_id, username, name, role } จากเซิร์ฟเวอร์
+
+let rooms = [];
+let meetings = [];
+let notifications = [];
+
+let pendingParticipants = []; // เก็บผู้เข้าร่วมระหว่างกรอกฟอร์มสร้างการประชุม
+let editingMeetingId = null;  // null = โหมดสร้างใหม่, ไม่ null = กำลังแก้ไขการประชุมนี้อยู่
+
+async function loadRooms(){ rooms = await api('GET', '/api/rooms'); }
+async function loadMeetings(){ meetings = await api('GET', '/api/meetings'); }
+async function loadNotifications(){ notifications = await api('GET', '/api/notifications'); updateBellDot(); }
+async function refreshAll(){ await Promise.all([loadRooms(), loadMeetings(), loadNotifications()]); }
+
+/* ==========================================================================
+   การแจ้งเตือน (Notifications) — ฝั่งเซิร์ฟเวอร์เป็นคนสร้างแถวใหม่ตอนมีเหตุการณ์
+   เกิดขึ้น (อนุมัติ/ปฏิเสธ/แก้ไข/ยกเลิก/เช็คอิน) หน้าเว็บแค่ดึงมาแสดง
+========================================================================== */
+function updateBellDot(){
+  const hasUnread = notifications.some(n => !n.is_read);
+  document.querySelectorAll('.bell-dot').forEach(el => { el.style.display = hasUnread ? 'block' : 'none'; });
+}
+
+function renderNotifications(){
+  const el = document.getElementById('notif-sheet');
+  el.innerHTML = `<p class="section-title" style="padding:14px 14px 0;">การแจ้งเตือน</p>` + (
+    notifications.map(n => `
+      <div class="notif-item">
+        <p class="t">${n.title}</p>
+        <p class="m">${n.message}</p>
+      </div>
+    `).join('') || `<div class="empty">ยังไม่มีการแจ้งเตือน</div>`
+  );
+}
+
+async function toggleNotifPanel(){
+  const panel = document.getElementById('notif-panel');
+  const opening = !panel.classList.contains('open');
+  panel.classList.toggle('open');
+  if (opening){
+    renderNotifications();
+    try { await api('POST', '/api/notifications/read-all'); } catch (e) { /* ไม่ร้ายแรง ปล่อยผ่าน */ }
+    notifications.forEach(n => { n.is_read = 1; });
+    updateBellDot();
+  }
+}
+
+/* ==========================================================================
+   ตรรกะการเปลี่ยนหน้า (Navigation)
+   หลักการเดียวกับแอปทั่วไป: มี .view เดียวที่ active อยู่ ณ เวลาหนึ่ง
+   ก่อนแสดงผลแต่ละหน้า จะดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์มาก่อนเสมอ
+========================================================================== */
+async function navigateTo(viewId){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(viewId).classList.add('active');
+  document.getElementById('content').scrollTop = 0;
+
+  document.querySelectorAll('#bottom-nav button[data-target]').forEach(b=>{
+    b.classList.toggle('active', b.dataset.target === viewId);
+  });
+
+  if (viewId !== 'login-view' && viewId !== 'register-view'){
+    try {
+      await refreshAll();
+    } catch (e) {
+      showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (เปิด server ด้วย npm start แล้วหรือยัง?)');
+      return;
+    }
+  }
+
+  if (viewId === 'home-view') renderDashboard();
+  if (viewId === 'meetings-view') renderMeetingsList();
+  if (viewId === 'create-view') resetCreateForm();
+  if (viewId === 'checkin-view') renderCheckinSelect();
+  if (viewId === 'admin-view') renderAdminList();
+}
+
+/* ==========================================================================
+   เข้าสู่ระบบ / สมัครสมาชิก / จำ session ไว้ข้ามการปิด-เปิดเว็บ
+   บทบาท (role) ถูกกำหนดตอนสมัครสมาชิกเท่านั้น เซิร์ฟเวอร์เป็นคนบอกกลับมาว่า
+   บัญชีนี้เป็นบทบาทอะไร หน้าเว็บแค่รับค่ามาแสดง ไม่ได้ให้ผู้ใช้เลือกเองอีกแล้ว
+========================================================================== */
+async function submitLogin(){
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!username || !password) return showToast('กรอกชื่อผู้ใช้และรหัสผ่านให้ครบ');
+
+  let result;
+  try {
+    result = await api('POST', '/api/auth/login', { username, password });
+  } catch (e) {
+    showToast('เข้าสู่ระบบไม่สำเร็จ: ' + e.message);
+    return;
+  }
+  document.getElementById('login-password').value = '';
+  applyLoginResult(result);
+}
+
+async function submitRegister(){
+  const name = document.getElementById('reg-name').value.trim();
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const confirm = document.getElementById('reg-confirm').value;
+  const role = document.querySelector('#reg-role-seg button.active').dataset.val;
+
+  if (!name || !username || !password) return showToast('กรอกข้อมูลให้ครบทุกช่อง');
+  if (password.length < 4) return showToast('รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร');
+  if (password !== confirm) return showToast('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+
+  let result;
+  try {
+    result = await api('POST', '/api/auth/register', { name, username, password, role });
+  } catch (e) {
+    showToast('สมัครสมาชิกไม่สำเร็จ: ' + e.message);
+    return;
+  }
+  showToast('สมัครสมาชิกสำเร็จ');
+  applyLoginResult(result);
+}
+
+function applyLoginResult(result){
+  authToken = result.token;
+  currentUser = result.user;
+  currentRole = result.user.role;
+  try { localStorage.setItem(TOKEN_STORAGE_KEY, authToken); } catch (e) { /* บาง browser ปิด localStorage ไว้ ก็ไม่เป็นไร */ }
+
+  const label = { employee:'พนักงาน', organizer:'ประธาน / ผู้จัดประชุม', admin:'แอดมิน' }[currentRole];
+  document.getElementById('home-role-label').textContent = `${label} · ${currentUser.name}`;
+
+  document.getElementById('bottom-nav').style.display = 'flex';
+  document.querySelectorAll('.admin-hide-create').forEach(el=>{
+    el.style.display = (currentRole === 'admin') ? 'none' : 'flex';
+  });
+  document.getElementById('nav-admin').classList.toggle('hidden-admin-only', currentRole !== 'admin');
+
+  navigateTo('home-view');
+}
+
+function logout(){
+  api('POST', '/api/auth/logout').catch(() => { /* เผื่อเซิร์ฟเวอร์ปิดอยู่ ก็ยัง logout ฝั่งเว็บได้ */ });
+  authToken = null;
+  currentRole = null;
+  currentUser = null;
+  try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (e) { /* เช่นเดียวกัน */ }
+  document.getElementById('bottom-nav').style.display = 'none';
+  navigateTo('login-view');
+}
+
+// ตอนเปิดเว็บ (หรือรีเฟรช) เช็คว่ามี token เดิมเก็บไว้ไหม ถ้ามีลองขอข้อมูลผู้ใช้
+// ปัจจุบันดู ถ้ายังใช้ได้ก็เข้าหน้าแรกให้เลย ไม่ต้อง login ใหม่ (session ไม่หายตอนปิดเว็บ)
+async function tryRestoreSession(){
+  let saved = null;
+  try { saved = localStorage.getItem(TOKEN_STORAGE_KEY); } catch (e) { /* ไม่มี localStorage ก็ข้ามไป */ }
+  if (!saved) return;
+
+  authToken = saved;
+  try {
+    const user = await api('GET', '/api/auth/me');
+    applyLoginResult({ token: saved, user });
+  } catch (e) {
+    authToken = null;
+    try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (e2) { /* ไม่เป็นไร */ }
+  }
+}
+tryRestoreSession();
+
+/* ==========================================================================
+   DASHBOARD
+========================================================================== */
+function renderDashboard(){
+  const today = meetings.filter(m => m.date === '2026-09-10');
+  const freeRooms = rooms.filter(r => r.status === 'free').length;
+  const checkedInCount = meetings.reduce((s,m)=> s + m.checkedIn.length, 0);
+  const pendingCount = meetings.filter(m => m.status === 'pending').length;
+
+  document.getElementById('stat-meetings').textContent = today.length;
+  document.getElementById('stat-rooms').textContent = freeRooms + ' / ' + rooms.length;
+  document.getElementById('stat-checkin').textContent = checkedInCount;
+  document.getElementById('stat-pending').textContent = pendingCount;
+
+  const upcomingEl = document.getElementById('upcoming-list');
+  upcomingEl.innerHTML = today.map(m => `
+    <div class="list-item" onclick="openMeetingDetail(${m.id})">
+      <div style="flex:1;">
+        <p class="ttl">${m.title}</p>
+        <p class="sub">${m.time} - ${m.type}${m.room ? ' - ห้อง ' + m.room : ''}</p>
+      </div>
+      ${statusBadge(m)}
+    </div>
+  `).join('') || `<div class="empty">ยังไม่มีการประชุมวันนี้</div>`;
+
+  const roomEl = document.getElementById('room-status-list');
+  roomEl.innerHTML = rooms.map(r => `
+    <div class="list-item" style="cursor:default;">
+      <div style="flex:1;"><p class="ttl">${r.name}</p><p class="sub">จุได้ ${r.capacity} คน</p></div>
+      ${r.status === 'free' ? '<span class="badge badge-accent">ว่าง</span>' : '<span class="badge badge-danger">ไม่ว่าง</span>'}
+    </div>
+  `).join('');
+}
+
+function statusBadge(m){
+  if (m.status === 'pending') return '<span class="badge badge-gold">รออนุมัติ</span>';
+  if (m.status === 'rejected') return '<span class="badge badge-danger">ถูกปฏิเสธ</span>';
+  if (m.status === 'cancelled') return '<span class="badge badge-danger">ยกเลิกแล้ว</span>';
+  if (m.confidential === 'ลับเฉพาะผู้เข้าร่วม') return '<span class="badge badge-info">ลับเฉพาะผู้เข้าร่วม</span>';
+  return '<span class="badge badge-accent">ยืนยันแล้ว</span>';
+}
+
+/* ==========================================================================
+   MY MEETINGS + DETAIL
+========================================================================== */
+function renderMeetingsList(){
+  const el = document.getElementById('meetings-list');
+  el.innerHTML = meetings.map(m => `
+    <div class="list-item" onclick="openMeetingDetail(${m.id})">
+      <div style="flex:1;">
+        <p class="ttl">${m.title}</p>
+        <p class="sub">${m.date} • ${m.time} • ${m.type}</p>
+      </div>
+      ${statusBadge(m)}
+    </div>
+  `).join('') || `<div class="empty">ยังไม่มีการประชุม</div>`;
+}
+
+async function openMeetingDetail(id){
+  const m = meetings.find(x => x.id === id);
+  if (!m) return;
+  const cancellable = (m.status === 'confirmed' || m.status === 'pending');
+  const checkinRate = m.participants.length ? Math.round(m.checkedIn.length / m.participants.length * 100) : 0;
+
+  document.getElementById('detail-title').textContent = m.title;
+  document.getElementById('detail-body').innerHTML = `
+    <div class="card" style="margin-bottom:14px;">
+      <p class="section-title" style="margin-bottom:12px;">${statusBadge(m)}</p>
+      <p class="sub" style="margin:0 0 6px;">📅 ${m.date} เวลา ${m.time}</p>
+      <p class="sub" style="margin:0 0 6px;">🗂️ รูปแบบ: ${m.type}${m.room ? ' • ห้อง ' + m.room : ''}</p>
+      ${m.link ? `<p class="sub" style="margin:0 0 6px;">🔗 ลิงก์: ${m.link}</p>` : ''}
+      <p class="sub" style="margin:0;">🔒 ระดับความลับ: ${m.confidential}</p>
+    </div>
+
+    ${(currentRole === 'organizer' || currentRole === 'admin') ? `
+      <div class="detail-actions">
+        <button class="btn btn-outline btn-sm" onclick="editMeeting(${m.id})">✏️ แก้ไขการประชุม</button>
+        ${cancellable ? `<button class="btn btn-danger-outline btn-sm" onclick="cancelMeeting(${m.id})">ยกเลิกการประชุม</button>` : ''}
+      </div>
+    ` : ''}
+
+    <p class="section-title" style="margin-top:18px;">Dashboard การเช็คอิน</p>
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-muted);">
+        <span>เช็คอินแล้ว ${m.checkedIn.length} / ${m.participants.length} คน</span>
+        <span>${checkinRate}%</span>
+      </div>
+      <div class="util-bar"><div style="width:${checkinRate}%;"></div></div>
+    </div>
+
+    <p class="section-title">ผู้เข้าร่วม (${m.participants.length})</p>
+    <div class="list" style="margin-bottom:14px;">
+      ${m.participants.map(p => `
+        <div class="list-item" style="cursor:default;">
+          <div style="flex:1;"><p class="ttl">${p}</p></div>
+          ${m.checkedIn.includes(p) ? '<span class="badge badge-accent">เช็คอินแล้ว</span>' : '<span class="badge badge-gold">ยังไม่เช็คอิน</span>'}
+        </div>
+      `).join('') || `<div class="empty">ยังไม่มีผู้เข้าร่วม</div>`}
+    </div>
+  `;
+  await navigateTo('meeting-detail-view');
+}
+
+async function cancelMeeting(id){
+  try {
+    await api('POST', `/api/meetings/${id}/cancel`);
+    showToast('ยกเลิกการประชุมแล้ว');
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+  navigateTo('meetings-view');
+}
+
+function editMeeting(id){
+  editingMeetingId = id;
+  navigateTo('create-view');
+}
+
+/* ==========================================================================
+   สร้างการประชุม / จองห้อง
+========================================================================== */
+function openCreateMeeting(){
+  editingMeetingId = null;
+  navigateTo('create-view');
+}
+
+function resetCreateForm(){
+  const editing = editingMeetingId ? meetings.find(x => x.id === editingMeetingId) : null;
+
+  document.querySelector('#create-view h1').textContent = editing ? 'แก้ไขการประชุม' : 'สร้างการประชุมใหม่';
+  document.getElementById('create-btn-label').textContent = editing ? 'บันทึกการแก้ไข' : 'ส่งคำขอจองและสร้างการประชุม';
+
+  document.getElementById('f-title').value = editing ? editing.title : '';
+  document.getElementById('f-date').value = editing ? editing.date : '2026-09-11';
+  document.getElementById('f-time').value = editing ? editing.time : '09:00';
+  document.getElementById('f-link').value = editing ? editing.link : '';
+  document.getElementById('f-confidential').value = editing ? editing.confidential : 'ทั่วไป';
+  pendingParticipants = editing ? [...editing.participants] : [];
+  renderParticipantChips();
+
+  const roomSelect = document.getElementById('f-room');
+  const keepRoom = editing ? rooms.find(r => r.id === editing.room) : null;
+  const freeRooms = rooms.filter(r => r.status === 'free' || (keepRoom && r.id === keepRoom.id));
+  roomSelect.innerHTML = freeRooms
+    .map(r => `<option value="${r.id}">${r.name} - ${r.status==='free' ? 'ว่าง' : 'ห้องเดิม'} (จุ ${r.capacity} คน)</option>`).join('')
+    || `<option value="">ไม่มีห้องว่าง</option>`;
+  if (keepRoom) roomSelect.value = keepRoom.id;
+
+  const typeVal = editing ? editing.type : 'Onsite';
+  pickSeg('type-seg', document.querySelector(`#type-seg button[data-val="${typeVal}"]`));
+}
+
+function pickSeg(groupId, btn){
+  document.querySelectorAll('#' + groupId + ' button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const val = btn.dataset.val;
+  document.getElementById('room-field').style.display = (val === 'Online') ? 'none' : 'block';
+  document.getElementById('link-field').style.display = (val === 'Onsite') ? 'none' : 'block';
+}
+
+function renderParticipantChips(){
+  const row = document.getElementById('participant-chips');
+  const input = document.getElementById('participant-input');
+  row.querySelectorAll('.chip').forEach(c => c.remove());
+  pendingParticipants.forEach((name, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${name} <button onclick="removeParticipant(${i})">✕</button>`;
+    row.insertBefore(chip, input);
+  });
+}
+function removeParticipant(i){ pendingParticipants.splice(i,1); renderParticipantChips(); }
+
+document.getElementById('participant-input').addEventListener('keydown', function(e){
+  if (e.key === 'Enter' && this.value.trim()){
+    e.preventDefault();
+    pendingParticipants.push(this.value.trim());
+    this.value = '';
+    renderParticipantChips();
+  }
+});
+
+async function submitCreateMeeting(){
+  const title = document.getElementById('f-title').value.trim();
+  if (!title){ showToast('กรุณากรอกชื่อการประชุม'); return; }
+
+  const type = document.querySelector('#type-seg button.active').dataset.val;
+  const needsRoom = (type !== 'Online');
+  const isEditing = !!editingMeetingId;
+
+  const fields = {
+    title,
+    date: document.getElementById('f-date').value,
+    time: document.getElementById('f-time').value,
+    type,
+    room: needsRoom ? document.getElementById('f-room').value : '',
+    link: (type !== 'Onsite') ? document.getElementById('f-link').value : '',
+    confidential: document.getElementById('f-confidential').value,
+    participants: [...pendingParticipants],
+  };
+
+  const btnLabel = document.getElementById('create-btn-label');
+  btnLabel.textContent = isEditing ? 'กำลังบันทึก...' : 'กำลังส่งคำขอ...';
+
+  try {
+    if (isEditing){
+      await api('PUT', `/api/meetings/${editingMeetingId}`, fields);
+      showToast('บันทึกการแก้ไขเรียบร้อย');
+    } else {
+      await api('POST', '/api/meetings', fields);
+      showToast(needsRoom ? 'ส่งคำขอจองห้องแล้ว รอแอดมินอนุมัติ' : 'สร้างการประชุมออนไลน์สำเร็จ');
+    }
+    editingMeetingId = null;
+    navigateTo('meetings-view');
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+    btnLabel.textContent = isEditing ? 'บันทึกการแก้ไข' : 'ส่งคำขอจองและสร้างการประชุม';
+  }
+}
+
+/* ==========================================================================
+   QR CHECK-IN (จำลองการสแกน แต่เช็คอินจริงผ่าน API)
+========================================================================== */
+function renderCheckinSelect(){
+  const sel = document.getElementById('checkin-meeting-select');
+  const today = meetings.filter(m => m.status === 'confirmed');
+  sel.innerHTML = today.map(m => `<option value="${m.id}">${m.title} (${m.time})</option>`).join('')
+    || `<option value="">ไม่มีการประชุมให้เช็คอิน</option>`;
+  document.getElementById('checkin-result').innerHTML = '';
+  renderQrBox();
+}
+
+/* ==========================================================================
+   สร้างลาย QR จำลอง (เพื่อความสมจริงในการนำเสนอ ไม่ใช่ QR ที่สแกนได้จริง)
+   ลายจะคงที่ตาม meetingId ที่เลือก เพื่อให้ดูเหมือน QR เฉพาะของแต่ละการประชุม
+========================================================================== */
+function renderQrBox(){
+  const box = document.getElementById('qr-box');
+  if (!box) return;
+  const sel = document.getElementById('checkin-meeting-select');
+  const seed = Number(sel?.value) || 1;
+  const N = 11;
+  const inFinder = (r, c) => {
+    const zones = [[0,0],[0,N-7],[N-7,0]]; // บนซ้าย บนขวา ล่างซ้าย
+    for (const [zr, zc] of zones){
+      const rr = r - zr, cc = c - zc;
+      if (rr >= 0 && rr < 7 && cc >= 0 && cc < 7) return { rr, cc };
+    }
+    return null;
+  };
+  let cells = '';
+  for (let r = 0; r < N; r++){
+    for (let c = 0; c < N; c++){
+      const f = inFinder(r, c);
+      let on;
+      if (f){
+        on = (f.rr === 0 || f.rr === 6 || f.cc === 0 || f.cc === 6) ||
+             (f.rr >= 2 && f.rr <= 4 && f.cc >= 2 && f.cc <= 4);
+      } else {
+        const h = Math.sin(seed * 127.1 + r * 311.7 + c * 74.3) * 43758.5453;
+        on = (h - Math.floor(h)) > 0.52;
+      }
+      cells += `<div class="cell${on ? ' on' : ''}"></div>`;
+    }
+  }
+  box.className = 'qr-pattern';
+  box.innerHTML = cells;
+}
+
+async function simulateCheckin(){
+  const meetingId = Number(document.getElementById('checkin-meeting-select').value);
+  const resultEl = document.getElementById('checkin-result');
+  const scanBtn = document.getElementById('scan-btn');
+  if (!meetingId){ showToast('ไม่มีการประชุมให้เช็คอิน'); return; }
+
+  scanBtn.disabled = true;
+  resultEl.innerHTML = `<div class="spinner"></div><p class="sub" style="margin-top:10px;">กำลังตรวจสอบสิทธิ์...</p>`;
+
+  try {
+    const who = currentUser ? currentUser.name : 'ผู้ใช้ปัจจุบัน';
+    // ใส่หน่วงเวลาสั้นๆ เพื่อให้เห็น spinner (ของจริง network ไป localhost เร็วมาก)
+    const [data] = await Promise.all([
+      api('POST', '/api/checkin', { meetingId, name: who }),
+      new Promise(r => setTimeout(r, 500)),
+    ]);
+    await loadMeetings();
+    scanBtn.disabled = false;
+    const m = meetings.find(x => x.id === meetingId);
+    const now = new Date();
+
+    if (data.ok){
+      resultEl.innerHTML = `
+        <div class="card" style="border-color:var(--accent);background:var(--accent-soft);">
+          <p style="margin:0;font-weight:600;color:var(--accent-dark);">เช็คอินสำเร็จ ✓</p>
+          <p class="sub" style="margin:4px 0 0;">${m ? m.title : ''} • ${now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</p>
+        </div>`;
+    } else {
+      resultEl.innerHTML = `
+        <div class="card" style="border-color:var(--danger);background:var(--danger-soft);">
+          <p style="margin:0;font-weight:600;color:var(--danger);">ไม่สามารถเช็คอินได้</p>
+          <p class="sub" style="margin:4px 0 0;">ไม่พบสิทธิ์เข้าร่วมการประชุมนี้ หรือหมดเวลาเช็คอิน</p>
+        </div>`;
+    }
+  } catch (e) {
+    scanBtn.disabled = false;
+    resultEl.innerHTML = `
+      <div class="card" style="border-color:var(--danger);background:var(--danger-soft);">
+        <p style="margin:0;font-weight:600;color:var(--danger);">เกิดข้อผิดพลาด</p>
+        <p class="sub" style="margin:4px 0 0;">${e.message}</p>
+      </div>`;
+  }
+}
+
+/* ==========================================================================
+   ADMIN - Dashboard สรุปผล + อนุมัติการจองห้อง
+========================================================================== */
+function renderAdminList(){
+  // ---- ภาพรวม / Dashboard สรุปผล (คำนวณจากข้อมูลที่โหลดมาสดๆ) ----
+  const totalCount = meetings.length;
+  const pendingCount = meetings.filter(m => m.status === 'pending').length;
+  const cancelledCount = meetings.filter(m => m.status === 'cancelled' || m.status === 'rejected').length;
+  const withParticipants = meetings.filter(m => m.participants.length > 0);
+  const avgCheckin = withParticipants.length
+    ? Math.round(withParticipants.reduce((s, m) => s + (m.checkedIn.length / m.participants.length), 0) / withParticipants.length * 100)
+    : 0;
+
+  document.getElementById('adm-stat-total').textContent = totalCount;
+  document.getElementById('adm-stat-pending').textContent = pendingCount;
+  document.getElementById('adm-stat-cancelled').textContent = cancelledCount;
+  document.getElementById('adm-stat-checkin').textContent = avgCheckin + '%';
+
+  const utilEl = document.getElementById('admin-room-util');
+  utilEl.innerHTML = rooms.map(r => {
+    const pct = r.status === 'busy' ? 100 : 0;
+    return `
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;">
+          <span>${r.name}</span>
+          <span class="sub">${r.status === 'busy' ? 'ไม่ว่าง' : 'ว่าง'}</span>
+        </div>
+        <div class="util-bar"><div style="width:${pct}%;${r.status==='busy' ? '' : 'background:var(--border);'}"></div></div>
+      </div>
+    `;
+  }).join('');
+
+  // ---- คำขอที่รออนุมัติ ----
+  const el = document.getElementById('admin-pending-list');
+  const pending = meetings.filter(m => m.status === 'pending');
+  el.innerHTML = pending.map(m => `
+    <div class="list-item" style="cursor:default;flex-direction:column;align-items:stretch;gap:10px;">
+      <div style="display:flex;justify-content:space-between;">
+        <div>
+          <p class="ttl">${m.title}</p>
+          <p class="sub">${m.date} • ${m.time} • ห้อง ${m.room || '-'}</p>
+        </div>
+        <span class="badge badge-gold">รออนุมัติ</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-accent btn-sm" onclick="approveMeeting(${m.id})">อนุมัติ</button>
+        <button class="btn btn-danger-outline btn-sm" onclick="rejectMeeting(${m.id})">ปฏิเสธ</button>
+      </div>
+    </div>
+  `).join('') || `<div class="empty">ไม่มีคำขอที่รออนุมัติ</div>`;
+}
+
+// หมายเหตุ: ตาม ER Diagram การอนุมัติ/ปฏิเสธเป็นสถานะของ "Booking" ไม่ใช่ของ
+// "Meeting" โดยตรง (Meeting 1 -- 0..1 Booking) ฟังก์ชันนี้จึงหา bookingId ที่
+// ผูกกับการประชุมนั้นจากแคช แล้วค่อยยิง API ไปที่ /api/bookings/:id/approve
+async function approveMeeting(id){
+  const m = meetings.find(x => x.id === id);
+  try {
+    if (m && m.bookingId) await api('POST', `/api/bookings/${m.bookingId}/approve`);
+    showToast('อนุมัติการจองห้องแล้ว');
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+  navigateTo('admin-view');
+}
+
+async function rejectMeeting(id){
+  const m = meetings.find(x => x.id === id);
+  try {
+    if (m && m.bookingId) await api('POST', `/api/bookings/${m.bookingId}/reject`);
+    showToast('ปฏิเสธคำขอจองห้องแล้ว');
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+  navigateTo('admin-view');
+}
+
+/* ==========================================================================
+   TOAST แจ้งเตือนสั้นๆ
+========================================================================== */
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'flex';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2200);
+}
+</script>
+</body>
+</html>

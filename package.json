@@ -1,0 +1,14 @@
+{
+  "name": "smart-meeting-app",
+  "version": "1.0.0",
+  "description": "Smart Meeting Management System - โปรเจกต์วิชา System Analysis & Design",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "@libsql/client": "^0.14.0"
+  }
+}
