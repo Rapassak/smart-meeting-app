@@ -63,6 +63,23 @@ async function migrate() {
     await driver.execute('DROP TABLE IF EXISTS sessions');
     await driver.execute('DROP TABLE users');
   }
+
+  // ----------------------------------------------------------------------------
+  // 0b) migration (เพิ่มระบบจัดการผู้ใช้/เช็คอินด้วย QR จริง): เดิมมี 3 บทบาท
+  //    (employee/organizer/admin) ตอนนี้เหลือ 2 บทบาท (employee/admin) —
+  //    บัญชีเก่าที่เป็น organizer แปลงเป็น employee ให้อัตโนมัติ (ไม่ลบบัญชีทิ้ง
+  //    แค่เปลี่ยนค่า role) และเพิ่มคอลัมน์ใหม่แบบไม่ทำลายข้อมูลเดิม (ALTER TABLE
+  //    ADD COLUMN เฉยๆ ไม่ใช่ DROP/CREATE ใหม่ จึงไม่กระทบข้อมูลจริงที่มีอยู่แล้ว)
+  // ----------------------------------------------------------------------------
+  if (await tableExists('users')) {
+    await driver.execute("UPDATE users SET role = 'employee' WHERE role = 'organizer'");
+  }
+  if ((await tableExists('meetings')) && !(await columnExists('meetings', 'chair_name'))) {
+    await driver.execute("ALTER TABLE meetings ADD COLUMN chair_name TEXT DEFAULT ''");
+  }
+  if ((await tableExists('participants')) && !(await columnExists('participants', 'position'))) {
+    await driver.execute("ALTER TABLE participants ADD COLUMN position TEXT DEFAULT ''");
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -99,6 +116,7 @@ const SCHEMA_STATEMENTS = [
     confidential_level  TEXT NOT NULL DEFAULT 'ทั่วไป',
     meeting_link        TEXT,
     organizer_id        INTEGER REFERENCES users(user_id),
+    chair_name          TEXT DEFAULT '',
     status              TEXT NOT NULL DEFAULT 'scheduled'
                           CHECK (status IN ('scheduled','cancelled','completed'))
   )`,
@@ -115,6 +133,7 @@ const SCHEMA_STATEMENTS = [
     participant_id    INTEGER PRIMARY KEY AUTOINCREMENT,
     meeting_id        INTEGER NOT NULL REFERENCES meetings(meeting_id),
     name              TEXT NOT NULL,
+    position          TEXT DEFAULT '',
     check_in_status   TEXT NOT NULL DEFAULT 'not_checked_in'
                         CHECK (check_in_status IN ('not_checked_in','checked_in')),
     check_in_time     TEXT
@@ -149,8 +168,10 @@ async function seed() {
       });
     }
     // บัญชีทดสอบ (เดโม) — รหัสผ่านเดียวกันหมดเพื่อให้ทดสอบง่าย เปลี่ยน/ลบได้ตามใจ
+    // (เหลือ 2 บทบาทแล้ว: employee / admin — "organizer1" เก็บชื่อผู้ใช้เดิมไว้
+    // เพื่อความคุ้นเคย แต่ตอนนี้เป็นบทบาทพนักงานเหมือนกับ employee1)
     await seedUser('employee1', 'demo1234', 'พนักงานทดสอบ', 'employee');
-    await seedUser('organizer1', 'demo1234', 'ประธาน/ผู้จัดประชุม', 'organizer');
+    await seedUser('organizer1', 'demo1234', 'พนักงานทดสอบ 2', 'employee');
     await seedUser('admin1', 'demo1234', 'แอดมิน', 'admin');
   }
 
@@ -169,18 +190,19 @@ async function seed() {
 
   const meetingCountResult = await driver.execute('SELECT COUNT(*) AS n FROM meetings');
   if (meetingCountResult.rows[0].n === 0) {
-    const organizerRow = (
-      await driver.execute("SELECT user_id FROM users WHERE role='organizer'")
+    const creatorRow = (
+      await driver.execute("SELECT user_id FROM users WHERE role='employee' ORDER BY user_id LIMIT 1")
     ).rows[0];
-    const organizerId = organizerRow ? organizerRow.user_id : null;
+    const creatorId = creatorRow ? creatorRow.user_id : null;
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD ของวันที่รันจริง ไม่ตายตัว
 
     async function insertMeeting(fields) {
       const result = await driver.execute({
-        sql: `INSERT INTO meetings (title, meeting_date, start_time, meeting_type, confidential_level, meeting_link, organizer_id, status)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO meetings (title, meeting_date, start_time, meeting_type, confidential_level, meeting_link, organizer_id, chair_name, status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           fields.title, fields.meeting_date, fields.start_time, fields.meeting_type,
-          fields.confidential_level, fields.meeting_link, fields.organizer_id, fields.status,
+          fields.confidential_level, fields.meeting_link, fields.organizer_id, fields.chair_name, fields.status,
         ],
       });
       return result.lastInsertRowid;
@@ -191,36 +213,40 @@ async function seed() {
         args: [meetingId, roomId, status],
       });
     }
-    async function insertParticipant(meetingId, name) {
+    async function insertParticipant(meetingId, name, position) {
       await driver.execute({
-        sql: 'INSERT INTO participants (meeting_id, name) VALUES (?, ?)',
-        args: [meetingId, name],
+        sql: `INSERT INTO participants (meeting_id, name, position, check_in_status, check_in_time)
+              VALUES (?, ?, ?, 'checked_in', datetime('now'))`,
+        args: [meetingId, name, position || ''],
       });
     }
 
     const m1 = await insertMeeting({
-      title: 'ประชุมทีม Marketing', meeting_date: '2026-09-10', start_time: '09:00',
+      title: 'ประชุมทีม Marketing', meeting_date: today, start_time: '09:00',
       meeting_type: 'Hybrid', confidential_level: 'ทั่วไป',
-      meeting_link: 'https://meet.google.com/abc-defg', organizer_id: organizerId, status: 'scheduled',
+      meeting_link: 'https://meet.google.com/abc-defg', organizer_id: creatorId,
+      chair_name: 'ประธาน ฝ่ายการตลาด', status: 'scheduled',
     });
     await insertBooking(m1, 'A', 'confirmed');
-    await insertParticipant(m1, 'สมชาย ใจดี');
-    await insertParticipant(m1, 'วิภา ศรีสุข');
+    await insertParticipant(m1, 'สมชาย ใจดี', 'นักการตลาด');
+    await insertParticipant(m1, 'วิภา ศรีสุข', 'กราฟิกดีไซเนอร์');
 
     const m2 = await insertMeeting({
-      title: 'ทบทวนงบประมาณไตรมาส', meeting_date: '2026-09-10', start_time: '10:30',
+      title: 'ทบทวนงบประมาณไตรมาส', meeting_date: today, start_time: '10:30',
       meeting_type: 'Onsite', confidential_level: 'ทั่วไป',
-      meeting_link: null, organizer_id: organizerId, status: 'scheduled',
+      meeting_link: null, organizer_id: creatorId,
+      chair_name: 'ผู้จัดการฝ่ายการเงิน', status: 'scheduled',
     });
     await insertBooking(m2, 'B', 'pending');
-    await insertParticipant(m2, 'อรุณ พงษ์ไทย');
+    await insertParticipant(m2, 'อรุณ พงษ์ไทย', 'นักบัญชี');
 
     const m3 = await insertMeeting({
-      title: 'สัมภาษณ์ผู้สมัคร', meeting_date: '2026-09-10', start_time: '13:00',
+      title: 'สัมภาษณ์ผู้สมัคร', meeting_date: today, start_time: '13:00',
       meeting_type: 'Online', confidential_level: 'ลับเฉพาะผู้เข้าร่วม',
-      meeting_link: 'https://meet.google.com/xyz-1234', organizer_id: organizerId, status: 'scheduled',
+      meeting_link: 'https://meet.google.com/xyz-1234', organizer_id: creatorId,
+      chair_name: 'หัวหน้าฝ่ายบุคคล', status: 'scheduled',
     });
-    await insertParticipant(m3, 'ฝ่ายบุคคล');
+    await insertParticipant(m3, 'ฝ่ายบุคคล', 'เจ้าหน้าที่สรรหา');
 
     await driver.execute({
       sql: 'INSERT INTO notifications (title, message, is_read) VALUES (?, ?, 1)',

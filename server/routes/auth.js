@@ -21,15 +21,16 @@ function publicUser(row) {
   return { user_id: row.user_id, username: row.username, name: row.name, role: row.role };
 }
 
-// POST /api/auth/register  body: { username, password, name, role }
+// POST /api/auth/register  body: { username, password, name }
+// หมายเหตุ: สมัครสมาชิกเองได้แค่บทบาท "พนักงาน" (employee) เท่านั้น
+// ไอดี Admin ต้องให้แอดมินคนที่มีอยู่แล้วเป็นคนสร้างให้ผ่านหน้า "จัดการผู้ใช้"
+// (ดู routes/users.js) ต่อให้ client ส่ง role มาด้วยก็จะถูกเพิกเฉย/บังคับเป็น employee เสมอ
 router.post('/register', asyncHandler(async (req, res) => {
-  const { username, password, name, role } = req.body || {};
+  const { username, password, name } = req.body || {};
+  const role = 'employee';
 
-  if (!username || !password || !name || !role) {
-    return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ (ชื่อ, ชื่อผู้ใช้, รหัสผ่าน, บทบาท)' });
-  }
-  if (!['employee', 'organizer', 'admin'].includes(role)) {
-    return res.status(400).json({ error: 'บทบาทไม่ถูกต้อง' });
+  if (!username || !password || !name) {
+    return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ (ชื่อ, ชื่อผู้ใช้, รหัสผ่าน)' });
   }
   if (String(password).length < 4) {
     return res.status(400).json({ error: 'รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร' });

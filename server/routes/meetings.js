@@ -27,6 +27,7 @@ const LIST_SQL = `
   SELECT
     m.meeting_id, m.title, m.meeting_date, m.start_time, m.meeting_type,
     m.confidential_level, m.meeting_link, m.status AS meeting_status,
+    m.organizer_id, m.chair_name,
     b.booking_id, b.room_id, b.status AS booking_status,
     r.room_name,
     u.name AS organizer_name
@@ -49,10 +50,15 @@ function shapeRow(row, participants) {
     link: row.meeting_link || '',
     confidential: row.confidential_level,
     organizer: row.organizer_name,
+    organizerId: row.organizer_id || null,
+    chairName: row.chair_name || '',
     status: overallStatus(row),
     bookingId: row.booking_id || null,
-    participants: participants.map((p) => p.name),
-    checkedIn: participants.filter((p) => p.check_in_status === 'checked_in').map((p) => p.name),
+    // attendees: คนที่เช็คอินเข้าร่วมจริง (ผ่าน QR เท่านั้น ไม่มีรายชื่อล่วงหน้าอีกต่อไป)
+    attendees: participants
+      .filter((p) => p.check_in_status === 'checked_in')
+      .map((p) => ({ name: p.name, position: p.position || '', checkedInAt: p.check_in_time })),
+    checkInCount: participants.filter((p) => p.check_in_status === 'checked_in').length,
   };
 }
 
@@ -86,22 +92,24 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/meetings — สร้างการประชุมใหม่
-// body: { title, date, time, type, room, link, confidential, participants: string[] }
+// body: { title, date, time, type, room, link, confidential, chairName }
+// หมายเหตุ: ไม่ต้องกรอกรายชื่อผู้เข้าร่วมล่วงหน้าอีกต่อไป เพราะผู้เข้าร่วมจะ
+// เช็คอินเข้ามาเองผ่าน QR Code ตอนถึงวันประชุมจริง (ดู routes/checkin.js)
 router.post('/', asyncHandler(async (req, res) => {
   const user = await getCurrentUser(req);
   if (!user) return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบก่อนสร้างการประชุม' });
 
-  const { title, date, time, type, room, link, confidential, participants } = req.body;
+  const { title, date, time, type, room, link, confidential, chairName } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'กรุณากรอกชื่อการประชุม' });
 
   const needsRoom = type !== 'Online';
 
   const insertResult = await db.execute({
-    sql: `INSERT INTO meetings (title, meeting_date, start_time, meeting_type, confidential_level, meeting_link, organizer_id, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled')`,
+    sql: `INSERT INTO meetings (title, meeting_date, start_time, meeting_type, confidential_level, meeting_link, organizer_id, chair_name, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')`,
     args: [
       title.trim(), date, time, type, confidential || 'ทั่วไป',
-      needsRoom ? '' : (link || ''), user.user_id,
+      needsRoom ? '' : (link || ''), user.user_id, (chairName || '').trim(),
     ],
   });
   const meetingId = insertResult.lastInsertRowid;
@@ -112,12 +120,6 @@ router.post('/', asyncHandler(async (req, res) => {
       sql: 'INSERT INTO notifications (title, message) VALUES (?, ?)',
       args: ['มีคำขอจองห้องใหม่', `"${title.trim()}" รอการอนุมัติจากแอดมิน`],
     });
-  }
-
-  for (const name of participants || []) {
-    if (name && name.trim()) {
-      await db.execute({ sql: 'INSERT INTO participants (meeting_id, name) VALUES (?, ?)', args: [meetingId, name.trim()] });
-    }
   }
 
   const row = await getOneRow(meetingId);
@@ -137,13 +139,13 @@ router.put('/:id', asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'แก้ไขได้เฉพาะการประชุมที่คุณเป็นผู้สร้าง หรือต้องเป็นแอดมิน' });
   }
 
-  const { title, date, time, type, room, link, confidential, participants } = req.body;
+  const { title, date, time, type, room, link, confidential, chairName } = req.body;
   const needsRoom = type !== 'Online';
 
   await db.execute({
     sql: `UPDATE meetings SET title=?, meeting_date=?, start_time=?, meeting_type=?,
-          confidential_level=?, meeting_link=? WHERE meeting_id=?`,
-    args: [title.trim(), date, time, type, confidential || 'ทั่วไป', needsRoom ? '' : (link || ''), meetingId],
+          confidential_level=?, meeting_link=?, chair_name=? WHERE meeting_id=?`,
+    args: [title.trim(), date, time, type, confidential || 'ทั่วไป', needsRoom ? '' : (link || ''), (chairName || '').trim(), meetingId],
   });
 
   const existingBookingResult = await db.execute({ sql: 'SELECT * FROM bookings WHERE meeting_id = ?', args: [meetingId] });
@@ -159,12 +161,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
     await db.execute({ sql: 'DELETE FROM bookings WHERE booking_id = ?', args: [existingBooking.booking_id] });
   }
 
-  await db.execute({ sql: 'DELETE FROM participants WHERE meeting_id = ?', args: [meetingId] });
-  for (const name of participants || []) {
-    if (name && name.trim()) {
-      await db.execute({ sql: 'INSERT INTO participants (meeting_id, name) VALUES (?, ?)', args: [meetingId, name.trim()] });
-    }
-  }
+  // หมายเหตุ: ไม่ลบรายชื่อผู้เข้าร่วม (participants) ทิ้งตอนแก้ไขอีกต่อไป เพราะตอนนี้
+  // participants คือคนที่เช็คอินเข้าจริงผ่าน QR แล้ว — การแก้ไขรายละเอียดการประชุม
+  // (เช่น เปลี่ยนเวลา/ห้อง) ไม่ควรลบประวัติการเช็คอินที่เกิดขึ้นไปแล้ว
 
   await db.execute({
     sql: 'INSERT INTO notifications (title, message) VALUES (?, ?)',

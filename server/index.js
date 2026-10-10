@@ -15,6 +15,7 @@ const bookingRoutes = require('./routes/bookings');
 const checkinRoutes = require('./routes/checkin');
 const notificationRoutes = require('./routes/notifications');
 const dashboardRoutes = require('./routes/dashboard');
+const userRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,16 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/checkin', checkinRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/users', userRoutes);
+
+// ----- หน้าเช็คอินจากการสแกน QR Code (ไม่ต้อง login) -----
+// QR ที่สร้างขึ้นจะพาไปที่ /checkin/<meetingId> — ต้องเสิร์ฟ index.html ตัวเดียวกับ
+// หน้าเว็บหลัก (เป็น SPA) ให้หน้าเว็บฝั่ง frontend เช็ค location.pathname เอง
+// แล้วเปลี่ยนไปแสดงฟอร์มเช็คอินแบบไม่ต้อง login (ดู public/index.html)
+// ต้องประกาศ route นี้ "ก่อน" express.static ด้านล่าง ไม่งั้นจะโดน static เสิร์ฟเป็น 404 ก่อน
+app.get('/checkin/:id', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
 
 // ----- หน้าเว็บ (frontend) -----
 // ไฟล์ทั้งหมดใน public/ (index.html, css, js) จะถูกเสิร์ฟตรงๆ

@@ -25,21 +25,13 @@ router.get('/', asyncHandler(async (req, res) => {
   `);
   const cancelledCount = cancelledResult.rows[0].n;
 
-  // อัตราเช็คอินเฉลี่ย เฉพาะการประชุมที่มีผู้เข้าร่วมอย่างน้อย 1 คน
-  const meetingsWithParticipantsResult = await db.execute(`
-    SELECT m.meeting_id,
-      (SELECT COUNT(*) FROM participants p WHERE p.meeting_id = m.meeting_id) AS total,
-      (SELECT COUNT(*) FROM participants p WHERE p.meeting_id = m.meeting_id AND p.check_in_status = 'checked_in') AS checked
-    FROM meetings m
-  `);
-  const meetingsWithParticipants = meetingsWithParticipantsResult.rows.filter((m) => m.total > 0);
-
-  const avgCheckin = meetingsWithParticipants.length
-    ? Math.round(
-        (meetingsWithParticipants.reduce((sum, m) => sum + m.checked / m.total, 0) /
-          meetingsWithParticipants.length) * 100
-      )
-    : 0;
+  // จำนวนผู้เช็คอินทั้งหมด (รวมทุกการประชุม) — ไม่ใช้ "อัตรา" แบบเดิมแล้ว เพราะ
+  // ตอนนี้ไม่มีรายชื่อผู้เข้าร่วมที่กรอกไว้ล่วงหน้าให้หารเป็นเปอร์เซ็นต์อีกต่อไป
+  // (ผู้เข้าร่วมทั้งหมดมาจากการเช็คอินผ่าน QR เท่านั้น)
+  const checkInCountResult = await db.execute(
+    "SELECT COUNT(*) AS n FROM participants WHERE check_in_status = 'checked_in'"
+  );
+  const totalCheckIns = checkInCountResult.rows[0].n;
 
   const roomsResult = await db.execute(`
     SELECT r.room_id AS id, r.room_name AS name,
@@ -54,7 +46,7 @@ router.get('/', asyncHandler(async (req, res) => {
     totalMeetings,
     pendingCount,
     cancelledCount,
-    avgCheckin,
+    totalCheckIns,
     rooms: roomsResult.rows,
   });
 }));

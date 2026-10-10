@@ -9,6 +9,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+<!-- ไลบรารีสร้าง QR Code จริงฝั่ง browser (ไม่ต้องติดตั้ง npm package ฝั่ง backend) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
 <style>
   /* ===================== DESIGN TOKENS ===================== */
   :root{
@@ -234,15 +237,6 @@
   .notif-item .t{ margin:0 0 3px; font-weight:600; color:var(--text); }
   .notif-item .m{ margin:0; color:var(--text-muted); font-size:12.5px; }
 
-  /* ===================== QR PATTERN (จำลองลาย QR) ===================== */
-  .qr-pattern{
-    width:200px; height:200px; margin:20px auto; border-radius:16px; background:#fff;
-    border:8px solid #1F2A44; display:grid; grid-template-columns:repeat(11,1fr);
-    grid-template-rows:repeat(11,1fr); gap:2px; padding:8px; box-sizing:border-box;
-  }
-  .qr-pattern .cell{ background:transparent; border-radius:1px; }
-  .qr-pattern .cell.on{ background:#1F2A44; }
-
   /* ===================== DASHBOARD MINI (admin overview) ===================== */
   .util-bar{ height:8px; border-radius:6px; background:var(--border); overflow:hidden; margin-top:6px; }
   .util-bar > div{ height:100%; background:var(--accent); border-radius:6px; }
@@ -294,14 +288,15 @@
 
             <div class="card" style="margin-top:24px;background:var(--accent-soft);border:none;">
               <p class="sub" style="margin:0 0 6px;font-weight:600;">บัญชีทดสอบ (เดโม)</p>
-              <p class="sub" style="margin:0;">employee1 / organizer1 / admin1 — รหัสผ่าน demo1234</p>
+              <p class="sub" style="margin:0;">employee1 / organizer1 (พนักงาน) · admin1 (แอดมิน) — รหัสผ่าน demo1234</p>
             </div>
           </div>
         </div>
 
         <!-- ============================================================
              VIEW 0.5: สมัครสมาชิก
-             เลือกบทบาทตอนสมัครครั้งเดียว ระบบจะจำไว้ในฐานข้อมูล ไม่ต้องเลือกซ้ำทุกครั้งที่เข้าสู่ระบบ
+             สมัครเองได้แค่บทบาท "พนักงาน" เท่านั้น — บัญชีแอดมินต้องให้แอดมินที่มี
+             อยู่แล้วเป็นคนสร้างให้ผ่านหน้า "จัดการผู้ใช้" (users-view) เท่านั้น
         ============================================================= -->
         <div class="view" id="register-view">
           <div class="app-header">
@@ -321,14 +316,12 @@
             <label>ยืนยันรหัสผ่าน</label>
             <input type="password" id="reg-confirm" placeholder="พิมพ์รหัสผ่านอีกครั้ง" autocomplete="new-password">
 
-            <label>บทบาทของฉัน</label>
-            <div class="seg" id="reg-role-seg">
-              <button type="button" data-val="employee" class="active" onclick="pickSeg('reg-role-seg', this)">พนักงาน</button>
-              <button type="button" data-val="organizer" onclick="pickSeg('reg-role-seg', this)">ผู้จัดประชุม</button>
-              <button type="button" data-val="admin" onclick="pickSeg('reg-role-seg', this)">แอดมิน</button>
-            </div>
-
             <button class="btn btn-accent" onclick="submitRegister()">สมัครสมาชิก</button>
+
+            <p style="text-align:center;font-size:12.5px;color:var(--text-muted);margin-top:12px;">
+              บัญชีที่สมัครเองจะได้บทบาท "พนักงาน" เสมอ — ถ้าต้องการบัญชีแอดมิน
+              ให้ติดต่อแอดมินที่มีอยู่แล้วให้สร้างให้
+            </p>
 
             <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:16px;">
               มีบัญชีอยู่แล้ว?
@@ -446,10 +439,9 @@
               <option value="ลับเฉพาะผู้เข้าร่วม">ลับเฉพาะผู้เข้าร่วม</option>
             </select>
 
-            <label>ผู้เข้าร่วม</label>
-            <div class="chip-row" id="participant-chips">
-              <input type="text" id="participant-input" placeholder="พิมพ์ชื่อแล้วกด Enter">
-            </div>
+            <label>ชื่อประธาน</label>
+            <input type="text" id="f-chair" placeholder="เช่น คุณสมชาย ใจดี (ประธานในที่ประชุม)">
+            <p class="sub" style="margin:-8px 0 14px;">ไม่ต้องกรอกรายชื่อผู้เข้าร่วมล่วงหน้าแล้ว — ผู้เข้าร่วมจะเช็คอินเองผ่าน QR Code ตอนถึงวันประชุม</p>
 
             <button class="btn btn-accent" onclick="submitCreateMeeting()">
               <span id="create-btn-label">ส่งคำขอจองและสร้างการประชุม</span>
@@ -458,26 +450,67 @@
         </div>
 
         <!-- ============================================================
-             VIEW 5: QR CHECK-IN
-             จำลองการสแกน QR ด้วยการเรียก API จริง (ไม่มีกล้องจริง)
+             VIEW 5: หน้าเช็คอินสาธารณะ (เปิดจากการสแกน QR Code จริง)
+             ไม่ต้อง login — ใครสแกนก็กรอกชื่อ+ตำแหน่งแล้วกดยืนยันได้เลย
+             (เปิดจาก URL /checkin/<meetingId> ดู initPublicCheckin() ด้านล่าง)
         ============================================================= -->
-        <div class="view" id="checkin-view">
+        <div class="view" id="public-checkin-view">
           <div class="app-header">
-            <h1>เช็คอินด้วย QR</h1>
+            <p class="eyebrow">Smart Meeting Management System</p>
+            <h1>เช็คอินเข้าร่วมประชุม</h1>
           </div>
-          <div class="pad" style="text-align:center;">
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
-              ยื่นโทรศัพท์สแกน QR หน้าห้องประชุม
-            </p>
-            <div id="qr-box"></div>
+          <div class="pad">
+            <div class="card" id="pc-meeting-info" style="margin-bottom:18px;text-align:center;">
+              <div class="spinner"></div>
+            </div>
+            <div id="pc-form">
+              <label>ชื่อ-นามสกุล</label>
+              <input type="text" id="pc-name" placeholder="เช่น สมชาย ใจดี">
 
-            <select id="checkin-meeting-select" style="margin-bottom:16px;" onchange="renderQrBox()"></select>
+              <label>ตำแหน่ง</label>
+              <input type="text" id="pc-position" placeholder="เช่น นักวิเคราะห์ระบบ">
 
-            <button class="btn btn-primary" id="scan-btn" onclick="simulateCheckin()">
-              จำลองการสแกน QR
-            </button>
+              <button class="btn btn-accent" id="pc-submit-btn" onclick="submitPublicCheckin()">ยืนยันการเข้าร่วม</button>
+            </div>
+            <div id="pc-success" style="display:none;text-align:center;padding:30px 10px;">
+              <div style="font-size:48px;margin-bottom:10px;">✅</div>
+              <p style="font-weight:600;font-size:16px;margin:0 0 6px;">ยืนยันการเข้าร่วมประชุมแล้ว</p>
+              <p class="sub" id="pc-success-sub"></p>
+            </div>
+          </div>
+        </div>
 
-            <div id="checkin-result" style="margin-top:18px;"></div>
+        <!-- ============================================================
+             VIEW 5.5: แอดมิน - จัดการผู้ใช้ (เฉพาะแอดมิน)
+        ============================================================= -->
+        <div class="view" id="users-view">
+          <div class="app-header">
+            <p class="eyebrow">แอดมิน</p>
+            <h1>จัดการผู้ใช้</h1>
+          </div>
+          <div class="pad">
+            <p class="section-title">เพิ่มผู้ใช้ใหม่</p>
+            <div class="card" style="margin-bottom:18px;">
+              <label>ชื่อ-นามสกุล</label>
+              <input type="text" id="nu-name" placeholder="เช่น สมหญิง รักงาน">
+
+              <label>ชื่อผู้ใช้ (username)</label>
+              <input type="text" id="nu-username" placeholder="ตั้งชื่อผู้ใช้">
+
+              <label>รหัสผ่าน</label>
+              <input type="password" id="nu-password" placeholder="อย่างน้อย 4 ตัวอักษร">
+
+              <label>บทบาท</label>
+              <div class="seg" id="nu-role-seg">
+                <button type="button" data-val="employee" class="active" onclick="pickSeg('nu-role-seg', this)">พนักงาน</button>
+                <button type="button" data-val="admin" onclick="pickSeg('nu-role-seg', this)">แอดมิน</button>
+              </div>
+
+              <button class="btn btn-accent" onclick="submitCreateUser()">เพิ่มผู้ใช้</button>
+            </div>
+
+            <p class="section-title">รายชื่อผู้ใช้ทั้งหมด</p>
+            <div class="list" id="users-list"></div>
           </div>
         </div>
 
@@ -505,7 +538,7 @@
               </div>
               <div class="stat-card">
                 <div class="num" id="adm-stat-checkin">-</div>
-                <div class="label">อัตราเช็คอินเฉลี่ย</div>
+                <div class="label">เช็คอินแล้ว (คน)</div>
               </div>
             </div>
 
@@ -535,9 +568,9 @@
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           สร้างใหม่
         </button>
-        <button data-target="checkin-view" onclick="navigateTo('checkin-view')" id="nav-checkin">
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h6m-3-3v6"/></svg>
-          เช็คอิน
+        <button data-target="users-view" onclick="navigateTo('users-view')" id="nav-users" class="hidden-admin-only">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m5-3.13a4 4 0 100-8 4 4 0 000 8zm6 3c1.657 0 3 1.79 3 4v2h-3m-9-6c-1.657 0-3 1.79-3 4v2h9v-2c0-2.21-1.343-4-3-4z"/></svg>
+          ผู้ใช้
         </button>
         <button data-target="admin-view" onclick="navigateTo('admin-view')" id="nav-admin" class="hidden-admin-only">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -581,19 +614,20 @@ async function api(method, url, body){
 ========================================================================== */
 const TOKEN_STORAGE_KEY = 'smartMeetingToken'; // เก็บ token ไว้ใน localStorage เพื่อไม่ต้อง login ใหม่ทุกครั้งที่เปิดเว็บ
 let authToken = null;     // token ที่ได้จาก POST /api/auth/login หรือ /api/auth/register
-let currentRole = null;   // 'employee' | 'organizer' | 'admin' — เซิร์ฟเวอร์เป็นคนกำหนดจากบัญชีที่สมัครไว้ ไม่ใช่ผู้ใช้เลือกเอง
+let currentRole = null;   // 'employee' | 'admin' — เซิร์ฟเวอร์เป็นคนกำหนดจากบัญชีที่สมัครไว้ ไม่ใช่ผู้ใช้เลือกเอง
 let currentUser = null;   // { user_id, username, name, role } จากเซิร์ฟเวอร์
 
 let rooms = [];
 let meetings = [];
 let notifications = [];
+let allUsers = [];
 
-let pendingParticipants = []; // เก็บผู้เข้าร่วมระหว่างกรอกฟอร์มสร้างการประชุม
 let editingMeetingId = null;  // null = โหมดสร้างใหม่, ไม่ null = กำลังแก้ไขการประชุมนี้อยู่
 
 async function loadRooms(){ rooms = await api('GET', '/api/rooms'); }
 async function loadMeetings(){ meetings = await api('GET', '/api/meetings'); }
 async function loadNotifications(){ notifications = await api('GET', '/api/notifications'); updateBellDot(); }
+async function loadUsers(){ allUsers = await api('GET', '/api/users'); }
 async function refreshAll(){ await Promise.all([loadRooms(), loadMeetings(), loadNotifications()]); }
 
 /* ==========================================================================
@@ -655,8 +689,8 @@ async function navigateTo(viewId){
   if (viewId === 'home-view') renderDashboard();
   if (viewId === 'meetings-view') renderMeetingsList();
   if (viewId === 'create-view') resetCreateForm();
-  if (viewId === 'checkin-view') renderCheckinSelect();
   if (viewId === 'admin-view') renderAdminList();
+  if (viewId === 'users-view') { await loadUsers(); renderUsersList(); }
 }
 
 /* ==========================================================================
@@ -685,15 +719,15 @@ async function submitRegister(){
   const username = document.getElementById('reg-username').value.trim();
   const password = document.getElementById('reg-password').value;
   const confirm = document.getElementById('reg-confirm').value;
-  const role = document.querySelector('#reg-role-seg button.active').dataset.val;
 
   if (!name || !username || !password) return showToast('กรอกข้อมูลให้ครบทุกช่อง');
   if (password.length < 4) return showToast('รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร');
   if (password !== confirm) return showToast('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
 
+  // สมัครสมาชิกเองได้แค่บทบาท "พนักงาน" เสมอ (เซิร์ฟเวอร์บังคับอยู่แล้ว ต่อให้ส่ง role มาก็ไม่มีผล)
   let result;
   try {
-    result = await api('POST', '/api/auth/register', { name, username, password, role });
+    result = await api('POST', '/api/auth/register', { name, username, password });
   } catch (e) {
     showToast('สมัครสมาชิกไม่สำเร็จ: ' + e.message);
     return;
@@ -708,7 +742,7 @@ function applyLoginResult(result){
   currentRole = result.user.role;
   try { localStorage.setItem(TOKEN_STORAGE_KEY, authToken); } catch (e) { /* บาง browser ปิด localStorage ไว้ ก็ไม่เป็นไร */ }
 
-  const label = { employee:'พนักงาน', organizer:'ประธาน / ผู้จัดประชุม', admin:'แอดมิน' }[currentRole];
+  const label = { employee:'พนักงาน', admin:'แอดมิน' }[currentRole] || currentRole;
   document.getElementById('home-role-label').textContent = `${label} · ${currentUser.name}`;
 
   document.getElementById('bottom-nav').style.display = 'flex';
@@ -716,6 +750,7 @@ function applyLoginResult(result){
     el.style.display = (currentRole === 'admin') ? 'none' : 'flex';
   });
   document.getElementById('nav-admin').classList.toggle('hidden-admin-only', currentRole !== 'admin');
+  document.getElementById('nav-users').classList.toggle('hidden-admin-only', currentRole !== 'admin');
 
   navigateTo('home-view');
 }
@@ -746,15 +781,73 @@ async function tryRestoreSession(){
     try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (e2) { /* ไม่เป็นไร */ }
   }
 }
-tryRestoreSession();
+
+/* ==========================================================================
+   หน้าเช็คอินสาธารณะ (เปิดจากการสแกน QR Code จริง) — ไม่ต้อง login เลย
+   URL รูปแบบ /checkin/<meetingId> (ดู server/index.js ที่ประกาศ route นี้ไว้
+   ก่อน express.static) ตรวจจาก location.pathname ตอนโหลดหน้าเว็บ ถ้าตรงรูปแบบ
+   นี้ จะข้ามระบบ login/session ทั้งหมด แสดงแค่ฟอร์มกรอกชื่อ+ตำแหน่งแทน
+========================================================================== */
+function getPublicCheckinMeetingId(){
+  const m = location.pathname.match(/^\/checkin\/(\d+)\/?$/);
+  return m ? Number(m[1]) : null;
+}
+const publicCheckinMeetingId = getPublicCheckinMeetingId();
+
+async function initPublicCheckin(meetingId){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('public-checkin-view').classList.add('active');
+  document.getElementById('bottom-nav').style.display = 'none';
+
+  const infoEl = document.getElementById('pc-meeting-info');
+  try {
+    const meeting = await api('GET', `/api/checkin/${meetingId}`);
+    infoEl.innerHTML = `
+      <p class="ttl" style="font-size:16px;margin:0 0 4px;">${meeting.title}</p>
+      <p class="sub" style="margin:0;">📅 ${meeting.date} • เวลา ${meeting.time}${meeting.chairName ? ' • ประธาน: ' + meeting.chairName : ''}</p>
+    `;
+  } catch (e) {
+    infoEl.innerHTML = `<p class="sub" style="color:var(--danger);margin:0;">${e.message}</p>`;
+    document.getElementById('pc-form').style.display = 'none';
+  }
+}
+
+async function submitPublicCheckin(){
+  const meetingId = publicCheckinMeetingId;
+  const name = document.getElementById('pc-name').value.trim();
+  const position = document.getElementById('pc-position').value.trim();
+  if (!name) { showToast('กรุณากรอกชื่อ'); return; }
+
+  const btn = document.getElementById('pc-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'กำลังยืนยัน...';
+
+  try {
+    await api('POST', `/api/checkin/${meetingId}`, { name, position });
+    document.getElementById('pc-form').style.display = 'none';
+    document.getElementById('pc-success').style.display = 'block';
+    document.getElementById('pc-success-sub').textContent = `${name}${position ? ' (' + position + ')' : ''}`;
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'ยืนยันการเข้าร่วม';
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+if (publicCheckinMeetingId) {
+  initPublicCheckin(publicCheckinMeetingId);
+} else {
+  tryRestoreSession();
+}
 
 /* ==========================================================================
    DASHBOARD
 ========================================================================== */
 function renderDashboard(){
-  const today = meetings.filter(m => m.date === '2026-09-10');
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const today = meetings.filter(m => m.date === todayStr);
   const freeRooms = rooms.filter(r => r.status === 'free').length;
-  const checkedInCount = meetings.reduce((s,m)=> s + m.checkedIn.length, 0);
+  const checkedInCount = meetings.reduce((s,m)=> s + (m.checkInCount || 0), 0);
   const pendingCount = meetings.filter(m => m.status === 'pending').length;
 
   document.getElementById('stat-meetings').textContent = today.length;
@@ -810,7 +903,11 @@ async function openMeetingDetail(id){
   const m = meetings.find(x => x.id === id);
   if (!m) return;
   const cancellable = (m.status === 'confirmed' || m.status === 'pending');
-  const checkinRate = m.participants.length ? Math.round(m.checkedIn.length / m.participants.length * 100) : 0;
+  // สิทธิ์แก้ไข/ยกเลิก: ต้องเป็น "เจ้าของการประชุม" (ผู้สร้าง) จริงๆ หรือเป็นแอดมิน
+  // เท่านั้น — ไม่ใช่เช็คจาก role === 'organizer' แบบเดิม (ตอนนี้ไม่มี role นี้แล้ว
+  // และพนักงานทุกคนสร้างการประชุมได้ จึงต้องแยกตาม organizerId ของแต่ละรายการ)
+  const isOwner = !!(currentUser && m.organizerId === currentUser.user_id);
+  const canManage = isOwner || currentRole === 'admin';
 
   document.getElementById('detail-title').textContent = m.title;
   document.getElementById('detail-body').innerHTML = `
@@ -819,36 +916,64 @@ async function openMeetingDetail(id){
       <p class="sub" style="margin:0 0 6px;">📅 ${m.date} เวลา ${m.time}</p>
       <p class="sub" style="margin:0 0 6px;">🗂️ รูปแบบ: ${m.type}${m.room ? ' • ห้อง ' + m.room : ''}</p>
       ${m.link ? `<p class="sub" style="margin:0 0 6px;">🔗 ลิงก์: ${m.link}</p>` : ''}
+      <p class="sub" style="margin:0 0 6px;">🎙️ ประธาน: ${m.chairName || '-'}</p>
       <p class="sub" style="margin:0;">🔒 ระดับความลับ: ${m.confidential}</p>
     </div>
 
-    ${(currentRole === 'organizer' || currentRole === 'admin') ? `
+    ${canManage ? `
       <div class="detail-actions">
         <button class="btn btn-outline btn-sm" onclick="editMeeting(${m.id})">✏️ แก้ไขการประชุม</button>
         ${cancellable ? `<button class="btn btn-danger-outline btn-sm" onclick="cancelMeeting(${m.id})">ยกเลิกการประชุม</button>` : ''}
       </div>
     ` : ''}
 
-    <p class="section-title" style="margin-top:18px;">Dashboard การเช็คอิน</p>
-    <div class="card" style="margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-muted);">
-        <span>เช็คอินแล้ว ${m.checkedIn.length} / ${m.participants.length} คน</span>
-        <span>${checkinRate}%</span>
+    <p class="section-title" style="margin-top:18px;">QR Code เช็คอิน</p>
+    <div class="card" style="margin-bottom:14px;text-align:center;">
+      <p class="sub" style="margin:0 0 10px;">ให้ผู้เข้าร่วมสแกน QR นี้เพื่อเช็คอินเข้าร่วมประชุม (ไม่ต้อง login)</p>
+      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 16px;" onclick="toggleDetailQr(${m.id})">แสดง / ซ่อน QR เช็คอิน</button>
+      <div id="detail-qr-box" style="display:none;margin-top:14px;">
+        <div id="detail-qr-canvas-wrap" style="display:flex;justify-content:center;"></div>
+        <p class="sub" style="margin:10px 0 0;word-break:break-all;">${location.origin}/checkin/${m.id}</p>
       </div>
-      <div class="util-bar"><div style="width:${checkinRate}%;"></div></div>
     </div>
 
-    <p class="section-title">ผู้เข้าร่วม (${m.participants.length})</p>
+    <p class="section-title">ผู้เข้าร่วมที่เช็คอินแล้ว (${m.attendees.length})</p>
     <div class="list" style="margin-bottom:14px;">
-      ${m.participants.map(p => `
+      ${m.attendees.map(a => `
         <div class="list-item" style="cursor:default;">
-          <div style="flex:1;"><p class="ttl">${p}</p></div>
-          ${m.checkedIn.includes(p) ? '<span class="badge badge-accent">เช็คอินแล้ว</span>' : '<span class="badge badge-gold">ยังไม่เช็คอิน</span>'}
+          <div style="flex:1;">
+            <p class="ttl">${a.name}</p>
+            <p class="sub">${a.position || '-'}</p>
+          </div>
+          <span class="badge badge-accent">เช็คอินแล้ว</span>
         </div>
-      `).join('') || `<div class="empty">ยังไม่มีผู้เข้าร่วม</div>`}
+      `).join('') || `<div class="empty">ยังไม่มีผู้เช็คอิน</div>`}
     </div>
   `;
   await navigateTo('meeting-detail-view');
+}
+
+// สร้าง QR Code จริงฝั่ง browser ด้วยไลบรารี qrcode (โหลดจาก CDN ใน <head>)
+// เข้ารหัสเป็นลิงก์ /checkin/<meetingId> ของเว็บนี้เอง — สแกนแล้วเปิดหน้าเช็คอิน
+// สาธารณะได้ทันที ไม่ต้อง login (ดู public-checkin-view + initPublicCheckin())
+function toggleDetailQr(meetingId){
+  const box = document.getElementById('detail-qr-box');
+  const wrap = document.getElementById('detail-qr-canvas-wrap');
+  const showing = box.style.display !== 'none';
+  if (showing){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  if (!wrap.querySelector('canvas')){
+    const canvas = document.createElement('canvas');
+    wrap.appendChild(canvas);
+    const url = `${location.origin}/checkin/${meetingId}`;
+    if (window.QRCode && QRCode.toCanvas){
+      QRCode.toCanvas(canvas, url, { width: 200, margin: 1 }, function (error) {
+        if (error) wrap.innerHTML = `<p class="sub">สร้าง QR ไม่สำเร็จ</p>`;
+      });
+    } else {
+      wrap.innerHTML = `<p class="sub">ไม่สามารถโหลดไลบรารี QR ได้ (ต้องต่ออินเทอร์เน็ตเพื่อโหลดจาก CDN)</p>`;
+    }
+  }
 }
 
 async function cancelMeeting(id){
@@ -880,13 +1005,13 @@ function resetCreateForm(){
   document.querySelector('#create-view h1').textContent = editing ? 'แก้ไขการประชุม' : 'สร้างการประชุมใหม่';
   document.getElementById('create-btn-label').textContent = editing ? 'บันทึกการแก้ไข' : 'ส่งคำขอจองและสร้างการประชุม';
 
+  const todayStr = new Date().toISOString().slice(0, 10); // วันนี้จริงๆ ไม่ใช่วันที่ตายตัวแบบเดิม
   document.getElementById('f-title').value = editing ? editing.title : '';
-  document.getElementById('f-date').value = editing ? editing.date : '2026-09-11';
+  document.getElementById('f-date').value = editing ? editing.date : todayStr;
   document.getElementById('f-time').value = editing ? editing.time : '09:00';
   document.getElementById('f-link').value = editing ? editing.link : '';
   document.getElementById('f-confidential').value = editing ? editing.confidential : 'ทั่วไป';
-  pendingParticipants = editing ? [...editing.participants] : [];
-  renderParticipantChips();
+  document.getElementById('f-chair').value = editing ? editing.chairName : '';
 
   const roomSelect = document.getElementById('f-room');
   const keepRoom = editing ? rooms.find(r => r.id === editing.room) : null;
@@ -908,28 +1033,6 @@ function pickSeg(groupId, btn){
   document.getElementById('link-field').style.display = (val === 'Onsite') ? 'none' : 'block';
 }
 
-function renderParticipantChips(){
-  const row = document.getElementById('participant-chips');
-  const input = document.getElementById('participant-input');
-  row.querySelectorAll('.chip').forEach(c => c.remove());
-  pendingParticipants.forEach((name, i) => {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.innerHTML = `${name} <button onclick="removeParticipant(${i})">✕</button>`;
-    row.insertBefore(chip, input);
-  });
-}
-function removeParticipant(i){ pendingParticipants.splice(i,1); renderParticipantChips(); }
-
-document.getElementById('participant-input').addEventListener('keydown', function(e){
-  if (e.key === 'Enter' && this.value.trim()){
-    e.preventDefault();
-    pendingParticipants.push(this.value.trim());
-    this.value = '';
-    renderParticipantChips();
-  }
-});
-
 async function submitCreateMeeting(){
   const title = document.getElementById('f-title').value.trim();
   if (!title){ showToast('กรุณากรอกชื่อการประชุม'); return; }
@@ -946,7 +1049,7 @@ async function submitCreateMeeting(){
     room: needsRoom ? document.getElementById('f-room').value : '',
     link: (type !== 'Onsite') ? document.getElementById('f-link').value : '',
     confidential: document.getElementById('f-confidential').value,
-    participants: [...pendingParticipants],
+    chairName: document.getElementById('f-chair').value.trim(),
   };
 
   const btnLabel = document.getElementById('create-btn-label');
@@ -969,99 +1072,6 @@ async function submitCreateMeeting(){
 }
 
 /* ==========================================================================
-   QR CHECK-IN (จำลองการสแกน แต่เช็คอินจริงผ่าน API)
-========================================================================== */
-function renderCheckinSelect(){
-  const sel = document.getElementById('checkin-meeting-select');
-  const today = meetings.filter(m => m.status === 'confirmed');
-  sel.innerHTML = today.map(m => `<option value="${m.id}">${m.title} (${m.time})</option>`).join('')
-    || `<option value="">ไม่มีการประชุมให้เช็คอิน</option>`;
-  document.getElementById('checkin-result').innerHTML = '';
-  renderQrBox();
-}
-
-/* ==========================================================================
-   สร้างลาย QR จำลอง (เพื่อความสมจริงในการนำเสนอ ไม่ใช่ QR ที่สแกนได้จริง)
-   ลายจะคงที่ตาม meetingId ที่เลือก เพื่อให้ดูเหมือน QR เฉพาะของแต่ละการประชุม
-========================================================================== */
-function renderQrBox(){
-  const box = document.getElementById('qr-box');
-  if (!box) return;
-  const sel = document.getElementById('checkin-meeting-select');
-  const seed = Number(sel?.value) || 1;
-  const N = 11;
-  const inFinder = (r, c) => {
-    const zones = [[0,0],[0,N-7],[N-7,0]]; // บนซ้าย บนขวา ล่างซ้าย
-    for (const [zr, zc] of zones){
-      const rr = r - zr, cc = c - zc;
-      if (rr >= 0 && rr < 7 && cc >= 0 && cc < 7) return { rr, cc };
-    }
-    return null;
-  };
-  let cells = '';
-  for (let r = 0; r < N; r++){
-    for (let c = 0; c < N; c++){
-      const f = inFinder(r, c);
-      let on;
-      if (f){
-        on = (f.rr === 0 || f.rr === 6 || f.cc === 0 || f.cc === 6) ||
-             (f.rr >= 2 && f.rr <= 4 && f.cc >= 2 && f.cc <= 4);
-      } else {
-        const h = Math.sin(seed * 127.1 + r * 311.7 + c * 74.3) * 43758.5453;
-        on = (h - Math.floor(h)) > 0.52;
-      }
-      cells += `<div class="cell${on ? ' on' : ''}"></div>`;
-    }
-  }
-  box.className = 'qr-pattern';
-  box.innerHTML = cells;
-}
-
-async function simulateCheckin(){
-  const meetingId = Number(document.getElementById('checkin-meeting-select').value);
-  const resultEl = document.getElementById('checkin-result');
-  const scanBtn = document.getElementById('scan-btn');
-  if (!meetingId){ showToast('ไม่มีการประชุมให้เช็คอิน'); return; }
-
-  scanBtn.disabled = true;
-  resultEl.innerHTML = `<div class="spinner"></div><p class="sub" style="margin-top:10px;">กำลังตรวจสอบสิทธิ์...</p>`;
-
-  try {
-    const who = currentUser ? currentUser.name : 'ผู้ใช้ปัจจุบัน';
-    // ใส่หน่วงเวลาสั้นๆ เพื่อให้เห็น spinner (ของจริง network ไป localhost เร็วมาก)
-    const [data] = await Promise.all([
-      api('POST', '/api/checkin', { meetingId, name: who }),
-      new Promise(r => setTimeout(r, 500)),
-    ]);
-    await loadMeetings();
-    scanBtn.disabled = false;
-    const m = meetings.find(x => x.id === meetingId);
-    const now = new Date();
-
-    if (data.ok){
-      resultEl.innerHTML = `
-        <div class="card" style="border-color:var(--accent);background:var(--accent-soft);">
-          <p style="margin:0;font-weight:600;color:var(--accent-dark);">เช็คอินสำเร็จ ✓</p>
-          <p class="sub" style="margin:4px 0 0;">${m ? m.title : ''} • ${now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</p>
-        </div>`;
-    } else {
-      resultEl.innerHTML = `
-        <div class="card" style="border-color:var(--danger);background:var(--danger-soft);">
-          <p style="margin:0;font-weight:600;color:var(--danger);">ไม่สามารถเช็คอินได้</p>
-          <p class="sub" style="margin:4px 0 0;">ไม่พบสิทธิ์เข้าร่วมการประชุมนี้ หรือหมดเวลาเช็คอิน</p>
-        </div>`;
-    }
-  } catch (e) {
-    scanBtn.disabled = false;
-    resultEl.innerHTML = `
-      <div class="card" style="border-color:var(--danger);background:var(--danger-soft);">
-        <p style="margin:0;font-weight:600;color:var(--danger);">เกิดข้อผิดพลาด</p>
-        <p class="sub" style="margin:4px 0 0;">${e.message}</p>
-      </div>`;
-  }
-}
-
-/* ==========================================================================
    ADMIN - Dashboard สรุปผล + อนุมัติการจองห้อง
 ========================================================================== */
 function renderAdminList(){
@@ -1069,15 +1079,14 @@ function renderAdminList(){
   const totalCount = meetings.length;
   const pendingCount = meetings.filter(m => m.status === 'pending').length;
   const cancelledCount = meetings.filter(m => m.status === 'cancelled' || m.status === 'rejected').length;
-  const withParticipants = meetings.filter(m => m.participants.length > 0);
-  const avgCheckin = withParticipants.length
-    ? Math.round(withParticipants.reduce((s, m) => s + (m.checkedIn.length / m.participants.length), 0) / withParticipants.length * 100)
-    : 0;
+  // จำนวนผู้เช็คอินทั้งหมด (ไม่ใช่ "อัตรา" แบบเดิม เพราะไม่มีรายชื่อผู้เข้าร่วมที่
+  // กรอกไว้ล่วงหน้าให้หารเป็นเปอร์เซ็นต์อีกต่อไป — ผู้เข้าร่วมทั้งหมดมาจาก QR เท่านั้น)
+  const totalCheckIns = meetings.reduce((s, m) => s + (m.checkInCount || 0), 0);
 
   document.getElementById('adm-stat-total').textContent = totalCount;
   document.getElementById('adm-stat-pending').textContent = pendingCount;
   document.getElementById('adm-stat-cancelled').textContent = cancelledCount;
-  document.getElementById('adm-stat-checkin').textContent = avgCheckin + '%';
+  document.getElementById('adm-stat-checkin').textContent = totalCheckIns;
 
   const utilEl = document.getElementById('admin-room-util');
   utilEl.innerHTML = rooms.map(r => {
@@ -1136,6 +1145,96 @@ async function rejectMeeting(id){
     showToast('เกิดข้อผิดพลาด: ' + e.message);
   }
   navigateTo('admin-view');
+}
+
+/* ==========================================================================
+   ADMIN - จัดการผู้ใช้ (เฉพาะแอดมิน)
+   ระบบ "ลืมรหัสผ่าน" ของแอปนี้คือให้แอดมินรีเซ็ตรหัสผ่านให้โดยตรง (ไม่มีอีเมล)
+========================================================================== */
+function renderUsersList(){
+  const el = document.getElementById('users-list');
+  const roleLabel = { employee: 'พนักงาน', admin: 'แอดมิน' };
+  el.innerHTML = allUsers.map(u => `
+    <div class="list-item" style="cursor:default;flex-direction:column;align-items:stretch;gap:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <p class="ttl">${u.name}${u.user_id === (currentUser && currentUser.user_id) ? ' (คุณ)' : ''}</p>
+          <p class="sub">@${u.username}</p>
+        </div>
+        <span class="badge ${u.role === 'admin' ? 'badge-info' : 'badge-accent'}">${roleLabel[u.role] || u.role}</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" style="width:auto;flex:1;" onclick="toggleUserRole(${u.user_id}, '${u.role}')">
+          ${u.role === 'admin' ? 'ลดเป็นพนักงาน' : 'ตั้งเป็นแอดมิน'}
+        </button>
+        <button class="btn btn-outline btn-sm" style="width:auto;flex:1;" onclick="resetUserPassword(${u.user_id}, '${escapeJs(u.name)}')">รีเซ็ตรหัสผ่าน</button>
+        <button class="btn btn-danger-outline btn-sm" style="width:auto;flex:1;" onclick="deleteUser(${u.user_id}, '${escapeJs(u.name)}')">ลบ</button>
+      </div>
+    </div>
+  `).join('') || `<div class="empty">ยังไม่มีผู้ใช้ในระบบ</div>`;
+}
+
+function escapeJs(str){ return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+async function submitCreateUser(){
+  const name = document.getElementById('nu-name').value.trim();
+  const username = document.getElementById('nu-username').value.trim();
+  const password = document.getElementById('nu-password').value;
+  const role = document.querySelector('#nu-role-seg button.active').dataset.val;
+
+  if (!name || !username || !password) return showToast('กรอกข้อมูลให้ครบทุกช่อง');
+  if (password.length < 4) return showToast('รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร');
+
+  try {
+    await api('POST', '/api/users', { name, username, password, role });
+    showToast('เพิ่มผู้ใช้สำเร็จ');
+    document.getElementById('nu-name').value = '';
+    document.getElementById('nu-username').value = '';
+    document.getElementById('nu-password').value = '';
+    pickSeg('nu-role-seg', document.querySelector('#nu-role-seg button[data-val="employee"]'));
+    await loadUsers();
+    renderUsersList();
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+async function toggleUserRole(userId, currentRoleOfUser){
+  const newRole = currentRoleOfUser === 'admin' ? 'employee' : 'admin';
+  const newRoleLabel = newRole === 'admin' ? 'แอดมิน' : 'พนักงาน';
+  if (!confirm(`เปลี่ยนบทบาทผู้ใช้นี้เป็น "${newRoleLabel}" ใช่หรือไม่?`)) return;
+  try {
+    await api('PUT', `/api/users/${userId}/role`, { role: newRole });
+    showToast('เปลี่ยนบทบาทสำเร็จ');
+    await loadUsers();
+    renderUsersList();
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+async function resetUserPassword(userId, name){
+  const newPassword = prompt(`ตั้งรหัสผ่านใหม่ให้ "${name}" (อย่างน้อย 4 ตัวอักษร):`);
+  if (!newPassword) return;
+  if (newPassword.length < 4) return showToast('รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร');
+  try {
+    await api('POST', `/api/users/${userId}/reset-password`, { newPassword });
+    showToast('รีเซ็ตรหัสผ่านสำเร็จ — แจ้งรหัสผ่านใหม่ให้เจ้าของบัญชีได้เลย');
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+async function deleteUser(userId, name){
+  if (!confirm(`ยืนยันลบผู้ใช้ "${name}" ออกจากระบบ? การกระทำนี้ย้อนกลับไม่ได้`)) return;
+  try {
+    await api('DELETE', `/api/users/${userId}`);
+    showToast('ลบผู้ใช้แล้ว');
+    await loadUsers();
+    renderUsersList();
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
 }
 
 /* ==========================================================================
