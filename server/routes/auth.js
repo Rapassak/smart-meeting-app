@@ -18,16 +18,26 @@ const { asyncHandler } = require('../util/async-handler');
 const router = express.Router();
 
 function publicUser(row) {
-  return { user_id: row.user_id, username: row.username, name: row.name, role: row.role };
+  return {
+    user_id: row.user_id, username: row.username, name: row.name, role: row.role,
+    access_level: row.access_level, account_status: row.account_status,
+  };
 }
 
-// POST /api/auth/register  body: { username, password, name }
+const VALID_ACCESS_LEVELS = [1, 2, 3];
+
+// POST /api/auth/register  body: { username, password, name, accessLevel }
 // หมายเหตุ: สมัครสมาชิกเองได้แค่บทบาท "พนักงาน" (employee) เท่านั้น
 // ไอดี Admin ต้องให้แอดมินคนที่มีอยู่แล้วเป็นคนสร้างให้ผ่านหน้า "จัดการผู้ใช้"
 // (ดู routes/users.js) ต่อให้ client ส่ง role มาด้วยก็จะถูกเพิกเฉย/บังคับเป็น employee เสมอ
+//
+// บัญชีที่สมัครเองจะได้สถานะ 'pending' เสมอ (ยัง login ไม่ได้) — ผู้สมัครเป็นคน
+// เลือกระดับการเข้าถึงชั้นความลับของตัวเอง (accessLevel) ตอนสมัคร แล้วแอดมินเป็น
+// คนกดอนุมัติให้ใช้งานได้จริงอีกที (ดู routes/users.js: POST /:id/approve-account)
 router.post('/register', asyncHandler(async (req, res) => {
-  const { username, password, name } = req.body || {};
+  const { username, password, name, accessLevel } = req.body || {};
   const role = 'employee';
+  const level = VALID_ACCESS_LEVELS.includes(Number(accessLevel)) ? Number(accessLevel) : 3;
 
   if (!username || !password || !name) {
     return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ (ชื่อ, ชื่อผู้ใช้, รหัสผ่าน)' });
@@ -41,16 +51,23 @@ router.post('/register', asyncHandler(async (req, res) => {
 
   const salt = randomSalt();
   const passwordHash = hashPassword(password, salt);
-  const insertResult = await db.execute({
-    sql: `INSERT INTO users (username, password_hash, password_salt, name, role) VALUES (?, ?, ?, ?, ?)`,
-    args: [username, passwordHash, salt, name.trim(), role],
+  await db.execute({
+    sql: `INSERT INTO users (username, password_hash, password_salt, name, role, access_level, account_status)
+          VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+    args: [username, passwordHash, salt, name.trim(), role, level],
   });
 
-  const user = { user_id: insertResult.lastInsertRowid, username, name: name.trim(), role };
-  const token = randomToken();
-  await db.execute({ sql: 'INSERT INTO sessions (token, user_id) VALUES (?, ?)', args: [token, user.user_id] });
+  // แจ้งเตือนแอดมิน (กว้างๆ เหมือนแจ้งเตือนคำขออื่นๆ ที่ต้องให้แอดมินมาดำเนินการ)
+  await db.execute({
+    sql: 'INSERT INTO notifications (title, message) VALUES (?, ?)',
+    args: ['มีบัญชีใหม่รอการอนุมัติ', `${name.trim()} (@${username}) สมัครสมาชิกใหม่ — ไปที่หน้า "จัดการผู้ใช้" เพื่ออนุมัติ`],
+  });
 
-  res.status(201).json({ token, user });
+  res.status(201).json({
+    ok: true,
+    status: 'pending',
+    message: 'สมัครสมาชิกสำเร็จ — กรุณารอแอดมินอนุมัติบัญชีก่อน ถึงจะเข้าสู่ระบบได้',
+  });
 }));
 
 // POST /api/auth/login  body: { username, password }
@@ -64,6 +81,12 @@ router.post('/login', asyncHandler(async (req, res) => {
   const row = result.rows[0];
   if (!row || !verifyPassword(password, row.password_salt, row.password_hash)) {
     return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+  }
+  if (row.account_status === 'pending') {
+    return res.status(403).json({ error: 'บัญชีของคุณกำลังรอการอนุมัติจากแอดมิน กรุณารอสักครู่แล้วลองใหม่' });
+  }
+  if (row.account_status === 'rejected') {
+    return res.status(403).json({ error: 'บัญชีนี้ไม่ได้รับการอนุมัติให้ใช้งาน กรุณาติดต่อแอดมิน' });
   }
 
   const token = randomToken();

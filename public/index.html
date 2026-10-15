@@ -86,14 +86,23 @@
      เลย ไม่ใช่การ์ดแคบๆ ตรงกลางเหมือนเปิดจากมือถือ + มีเมนูด้านข้าง (sidebar)
      แทนเมนูด้านล่าง — ฟีเจอร์/หน้าทุกอย่างเหมือนเดิมทุกประการ ต่างกันแค่การจัดวาง ===================== */
   @media (min-width:1024px){
-    .app-shell{ padding:0; align-items:stretch; }
+    .app-shell{ padding:0; align-items:stretch; background:var(--bg); }
     .phone{
       width:100vw; height:100vh; max-width:none;
       border-radius:0; box-shadow:none;
       flex-direction:row;
+      background:var(--bg);
     }
     #bottom-nav{ display:none !important; }
-    #sidebar-nav{ display:flex; }
+    /* sidebar + เนื้อหา ลอยเป็นการ์ดแยกกัน เว้นระยะจากขอบจอ/มุมซ้ายบน แทนที่จะ
+       ชิดขอบเต็มๆ แบบแผงควบคุม — ให้ความรู้สึกเหมือนแดชบอร์ดที่จัดวางมาอย่างตั้งใจ */
+    #sidebar-nav{ display:flex; margin:20px 0 20px 20px; border-radius:16px; }
+    .screen{
+      margin:20px 20px 20px 16px;
+      border-radius:16px;
+      border:1px solid var(--border);
+      box-shadow:0 2px 24px rgba(0,0,0,.07);
+    }
     .content{ padding-bottom:28px; }
     .app-header{ padding:28px 36px 20px; }
     .pad{ padding:24px 36px 36px; max-width:1040px; }
@@ -291,6 +300,28 @@
 
   /* ===================== detail action buttons ===================== */
   .detail-actions{ display:flex; gap:8px; margin-top:14px; }
+
+  /* ===================== PAGINATION (ใช้ร่วมกันทุกแท็บที่มีลิสต์) ===================== */
+  .pager{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
+  .pager .btn{ width:auto; flex:0 0 auto; padding:0 16px; }
+  .pager-info{ font-size:12.5px; color:var(--text-muted); }
+
+  /* ===================== list item chevron (บอกว่ากดเข้าไปดูรายละเอียดได้) ===================== */
+  .list-chevron{ color:var(--text-muted); font-size:19px; flex-shrink:0; line-height:1; }
+
+  /* ===================== filter card (ประวัติการประชุม ฯลฯ) ===================== */
+  .filter-grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:480px){ .filter-grid-2{ grid-template-columns:1fr; } }
+  .result-count{ font-size:12.5px; color:var(--text-muted); margin:0 0 8px; }
+
+  /* ===================== notifications: ปุ่มปิดรายอัน + ล้างทั้งหมด ===================== */
+  .notif-item{ display:flex; gap:8px; align-items:flex-start; justify-content:space-between; }
+  .notif-dismiss{
+    background:none; border:none; color:var(--text-muted); font-size:18px; line-height:1;
+    cursor:pointer; padding:2px 4px; flex-shrink:0;
+  }
+  .notif-sheet-head{ display:flex; align-items:center; justify-content:space-between; padding:14px 14px 0; }
+  .notif-clear-all{ font-size:12.5px; color:var(--accent-dark); font-weight:600; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -307,7 +338,7 @@
       </button>
       <button data-target="meetings-view" onclick="navigateTo('meetings-view')">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        ประชุม
+        การประชุม
       </button>
       <button data-target="history-view" onclick="navigateTo('history-view')">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -389,29 +420,45 @@
             <h1>สมัครสมาชิก</h1>
           </div>
           <div class="pad">
-            <label>ชื่อ-นามสกุล</label>
-            <input type="text" id="reg-name" placeholder="เช่น สมชาย ใจดี">
+            <div id="reg-form">
+              <label>ชื่อ-นามสกุล</label>
+              <input type="text" id="reg-name" placeholder="เช่น สมชาย ใจดี">
 
-            <label>ชื่อผู้ใช้ (username)</label>
-            <input type="text" id="reg-username" placeholder="ตั้งชื่อผู้ใช้สำหรับเข้าสู่ระบบ" autocomplete="username">
+              <label>ชื่อผู้ใช้ (username)</label>
+              <input type="text" id="reg-username" placeholder="ตั้งชื่อผู้ใช้สำหรับเข้าสู่ระบบ" autocomplete="username">
 
-            <label>รหัสผ่าน</label>
-            <input type="password" id="reg-password" placeholder="อย่างน้อย 4 ตัวอักษร" autocomplete="new-password">
+              <label>รหัสผ่าน</label>
+              <input type="password" id="reg-password" placeholder="อย่างน้อย 4 ตัวอักษร" autocomplete="new-password">
 
-            <label>ยืนยันรหัสผ่าน</label>
-            <input type="password" id="reg-confirm" placeholder="พิมพ์รหัสผ่านอีกครั้ง" autocomplete="new-password">
+              <label>ยืนยันรหัสผ่าน</label>
+              <input type="password" id="reg-confirm" placeholder="พิมพ์รหัสผ่านอีกครั้ง" autocomplete="new-password">
 
-            <button class="btn btn-accent" onclick="submitRegister()">สมัครสมาชิก</button>
+              <label>ระดับการเข้าถึงชั้นความลับของคุณ</label>
+              <select id="reg-access-level">
+                <option value="3" selected>ระดับ 3 — เห็นได้เฉพาะการประชุมทั่วไป</option>
+                <option value="2">ระดับ 2 — เห็นได้ถึงระดับ "ลับ"</option>
+                <option value="1">ระดับ 1 — เห็นได้ทุกการประชุม (สูงสุด)</option>
+              </select>
+              <p class="sub" style="margin:-8px 0 14px;">แอดมินจะเป็นคนตรวจสอบและอนุมัติระดับนี้อีกครั้งตอนอนุมัติบัญชี</p>
 
-            <p style="text-align:center;font-size:12.5px;color:var(--text-muted);margin-top:12px;">
-              บัญชีที่สมัครเองจะได้บทบาท "พนักงาน" เสมอ — ถ้าต้องการบัญชีแอดมิน
-              ให้ติดต่อแอดมินที่มีอยู่แล้วให้สร้างให้
-            </p>
+              <button class="btn btn-accent" onclick="submitRegister()">สมัครสมาชิก</button>
 
-            <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:16px;">
-              มีบัญชีอยู่แล้ว?
-              <span style="color:var(--accent-dark);font-weight:600;cursor:pointer;" onclick="navigateTo('login-view')">เข้าสู่ระบบ</span>
-            </p>
+              <p style="text-align:center;font-size:12.5px;color:var(--text-muted);margin-top:12px;">
+                บัญชีที่สมัครเองจะได้บทบาท "พนักงาน" เสมอ และต้องรอแอดมินอนุมัติก่อนถึงจะเข้าสู่ระบบได้ —
+                ถ้าต้องการบัญชีแอดมิน ให้ติดต่อแอดมินที่มีอยู่แล้วให้สร้างให้
+              </p>
+
+              <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:16px;">
+                มีบัญชีอยู่แล้ว?
+                <span style="color:var(--accent-dark);font-weight:600;cursor:pointer;" onclick="navigateTo('login-view')">เข้าสู่ระบบ</span>
+              </p>
+            </div>
+            <div id="reg-success" style="display:none;text-align:center;padding:30px 10px;">
+              <div style="font-size:44px;margin-bottom:10px;">⏳</div>
+              <p style="font-weight:600;font-size:15.5px;margin:0 0 6px;">สมัครสมาชิกสำเร็จ</p>
+              <p class="sub">บัญชีของคุณกำลังรอแอดมินอนุมัติ — เมื่ออนุมัติแล้วจะเข้าสู่ระบบได้ทันที</p>
+              <button class="btn btn-outline" style="margin-top:20px;" onclick="navigateTo('login-view')">กลับไปหน้าเข้าสู่ระบบ</button>
+            </div>
           </div>
         </div>
 
@@ -490,10 +537,11 @@
         ============================================================= -->
         <div class="view" id="meetings-view">
           <div class="app-header">
-            <h1>การประชุมของฉัน</h1>
+            <h1>รายการการประชุม</h1>
           </div>
           <div class="pad">
             <div class="list" id="meetings-list"></div>
+            <div id="meetings-pager"></div>
           </div>
         </div>
 
@@ -526,6 +574,8 @@
               <div><label>วันที่</label><input type="date" id="f-date"></div>
               <div><label>เวลาเริ่ม</label><input type="time" id="f-time"></div>
             </div>
+            <label>เวลาจบ</label>
+            <input type="time" id="f-end-time">
 
             <label>รูปแบบการประชุม</label>
             <div class="seg" id="type-seg">
@@ -547,7 +597,8 @@
             <label>ระดับความลับ</label>
             <select id="f-confidential">
               <option value="ทั่วไป">ทั่วไป (เห็นได้ทุกคน)</option>
-              <option value="ลับเฉพาะผู้เข้าร่วม">ลับเฉพาะผู้เข้าร่วม</option>
+              <option value="ลับ">ลับ (เห็นได้ตั้งแต่ระดับการเข้าถึง 1-2)</option>
+              <option value="ลับมาก">ลับมาก (เห็นได้เฉพาะระดับการเข้าถึงสูงสุด)</option>
             </select>
 
             <label>ชื่อประธาน</label>
@@ -617,14 +668,26 @@
                 <button type="button" data-val="admin" onclick="pickSeg('nu-role-seg', this)">แอดมิน</button>
               </div>
 
+              <label>ระดับการเข้าถึงชั้นความลับ</label>
+              <div class="seg" id="nu-access-seg">
+                <button type="button" data-val="1" onclick="pickSeg('nu-access-seg', this)">ระดับ 1 (สูงสุด)</button>
+                <button type="button" data-val="2" onclick="pickSeg('nu-access-seg', this)">ระดับ 2</button>
+                <button type="button" data-val="3" class="active" onclick="pickSeg('nu-access-seg', this)">ระดับ 3</button>
+              </div>
+
               <button class="btn btn-accent" onclick="submitCreateUser()">เพิ่มผู้ใช้</button>
             </div>
 
+            <p class="section-title">บัญชีใหม่ที่รอการอนุมัติ</p>
+            <div class="list" id="pending-accounts-list" style="margin-bottom:18px;"></div>
+
             <p class="section-title">คำขอรีเซ็ตรหัสผ่านที่รอดำเนินการ</p>
-            <div class="list" id="password-requests-list" style="margin-bottom:18px;"></div>
+            <div class="list" id="password-requests-list"></div>
+            <div id="pwreq-pager" style="margin-bottom:18px;"></div>
 
             <p class="section-title">รายชื่อผู้ใช้ทั้งหมด</p>
             <div class="list" id="users-list"></div>
+            <div id="users-pager"></div>
           </div>
         </div>
 
@@ -676,7 +739,50 @@
           </div>
           <div class="pad">
             <p class="sub" style="margin:-4px 0 14px;">รวมการประชุมทั้งหมดในระบบ (รวมที่จบไปแล้ว) — คลิกเพื่อดูรายละเอียดและสถานะรายงานการประชุม</p>
+
+            <div class="card" style="margin-bottom:14px;">
+              <label>ค้นหาชื่อการประชุม</label>
+              <input type="text" id="hist-f-search" placeholder="พิมพ์ชื่อการประชุม..." oninput="onHistoryFilterChange()">
+
+              <div class="filter-grid-2">
+                <div><label>จากวันที่</label><input type="date" id="hist-f-from" onchange="onHistoryFilterChange()"></div>
+                <div><label>ถึงวันที่</label><input type="date" id="hist-f-to" onchange="onHistoryFilterChange()"></div>
+              </div>
+
+              <div class="filter-grid-2">
+                <div>
+                  <label>สถานะ</label>
+                  <select id="hist-f-status" onchange="onHistoryFilterChange()">
+                    <option value="all">ทั้งหมด</option>
+                    <option value="upcoming">กำลังจะมาถึง</option>
+                    <option value="unreported">ยังไม่บันทึกรายงาน</option>
+                    <option value="reported">บันทึกรายงานแล้ว</option>
+                    <option value="cancelled">ยกเลิก/ถูกปฏิเสธ</option>
+                  </select>
+                </div>
+                <div>
+                  <label>ระดับความลับ</label>
+                  <select id="hist-f-confidential" onchange="onHistoryFilterChange()">
+                    <option value="all">ทั้งหมด</option>
+                    <option value="ทั่วไป">ทั่วไป</option>
+                    <option value="ลับ">ลับ</option>
+                    <option value="ลับมาก">ลับมาก</option>
+                  </select>
+                </div>
+              </div>
+
+              <label>เรียงลำดับ</label>
+              <select id="hist-f-sort" onchange="onHistoryFilterChange()" style="margin-bottom:10px;">
+                <option value="desc">วันที่ล่าสุดก่อน</option>
+                <option value="asc">วันที่เก่าสุดก่อน</option>
+              </select>
+
+              <button class="btn btn-outline btn-sm" onclick="resetHistoryFilters()">ล้างตัวกรอง</button>
+            </div>
+
+            <p class="result-count" id="history-result-count"></p>
             <div class="list" id="history-list"></div>
+            <div id="history-pager"></div>
           </div>
         </div>
 
@@ -713,7 +819,7 @@
         </button>
         <button data-target="meetings-view" onclick="navigateTo('meetings-view')">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-          ประชุม
+          การประชุม
         </button>
         <button data-target="create-view" onclick="openCreateMeeting()" class="admin-hide-create">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
@@ -777,9 +883,39 @@ let meetings = [];
 let notifications = [];
 let allUsers = [];
 let passwordRequests = [];
+let pendingAccounts = [];
 
 let editingMeetingId = null;  // null = โหมดสร้างใหม่, ไม่ null = กำลังแก้ไขการประชุมนี้อยู่
 let reportMeetingId = null;   // การประชุมที่กำลังกรอก/ดูรายงานอยู่ในหน้า report-view
+
+// ==========================================================================
+// PAGINATION (ใช้ร่วมกันทุกแท็บที่มีลิสต์ — โชว์ 10 รายการ/หน้า)
+// ==========================================================================
+const PAGE_SIZE = 10;
+let meetingsPage = 1;
+let historyPage = 1;
+let usersPage = 1;
+let pwReqPage = 1;
+
+function renderPager(containerId, page, totalPages, which){
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="pager">
+      <button class="btn btn-outline btn-sm" ${page <= 1 ? 'disabled' : ''} onclick="goToPage('${which}', ${page - 1})">‹ ก่อนหน้า</button>
+      <span class="pager-info">หน้า ${page} / ${totalPages}</span>
+      <button class="btn btn-outline btn-sm" ${page >= totalPages ? 'disabled' : ''} onclick="goToPage('${which}', ${page + 1})">ถัดไป ›</button>
+    </div>
+  `;
+}
+
+function goToPage(which, page){
+  if (which === 'meetings'){ meetingsPage = page; renderMeetingsList(); }
+  if (which === 'history'){ historyPage = page; renderHistoryList(); }
+  if (which === 'users'){ usersPage = page; renderUsersList(); }
+  if (which === 'pwreq'){ pwReqPage = page; renderPasswordRequests(); }
+}
 
 async function loadRooms(){ rooms = await api('GET', '/api/rooms'); }
 async function loadMeetings(){ meetings = await api('GET', '/api/meetings'); }
@@ -788,6 +924,10 @@ async function loadUsers(){ allUsers = await api('GET', '/api/users'); }
 async function loadPasswordRequests(){
   if (currentRole !== 'admin') { passwordRequests = []; return; }
   try { passwordRequests = await api('GET', '/api/password-reset/pending'); } catch (e) { passwordRequests = []; }
+}
+async function loadPendingAccounts(){
+  if (currentRole !== 'admin') { pendingAccounts = []; return; }
+  try { pendingAccounts = await api('GET', '/api/users/pending-accounts'); } catch (e) { pendingAccounts = []; }
 }
 async function refreshAll(){ await Promise.all([loadRooms(), loadMeetings(), loadNotifications()]); }
 
@@ -802,14 +942,40 @@ function updateBellDot(){
 
 function renderNotifications(){
   const el = document.getElementById('notif-sheet');
-  el.innerHTML = `<p class="section-title" style="padding:14px 14px 0;">การแจ้งเตือน</p>` + (
+  const head = `
+    <div class="notif-sheet-head">
+      <p class="section-title" style="margin:0;">การแจ้งเตือน</p>
+      ${notifications.length ? '<span class="notif-clear-all" onclick="clearAllNotifications()">ล้างทั้งหมด</span>' : ''}
+    </div>
+  `;
+  el.innerHTML = head + (
     notifications.map(n => `
       <div class="notif-item">
-        <p class="t">${n.title}</p>
-        <p class="m">${n.message}</p>
+        <div style="flex:1;min-width:0;">
+          <p class="t">${n.title}</p>
+          <p class="m">${n.message}</p>
+        </div>
+        <button class="notif-dismiss" onclick="dismissNotification(${n.notif_id}, event)" aria-label="ปิดการแจ้งเตือนนี้">×</button>
       </div>
     `).join('') || `<div class="empty">ยังไม่มีการแจ้งเตือน</div>`
   );
+}
+
+// กดอ่านแล้วหาย — ลบออกจากรายการของ "ฉัน" คนเดียว (คนอื่นที่ยังไม่เห็นแจ้งเตือน
+// กว้างๆ อันเดียวกันนี้ ยังเห็นอยู่ตามปกติ ไม่ได้ลบข้อมูลจริงทิ้งจากระบบ)
+async function dismissNotification(id, evt){
+  if (evt) evt.stopPropagation();
+  try { await api('POST', `/api/notifications/${id}/dismiss`); } catch (e) { /* ไม่ร้ายแรง ปล่อยผ่าน */ }
+  notifications = notifications.filter(n => n.notif_id !== id);
+  renderNotifications();
+  updateBellDot();
+}
+
+async function clearAllNotifications(){
+  try { await api('POST', '/api/notifications/dismiss-all'); } catch (e) { /* ไม่ร้ายแรง ปล่อยผ่าน */ }
+  notifications = [];
+  renderNotifications();
+  updateBellDot();
 }
 
 async function toggleNotifPanel(){
@@ -848,12 +1014,20 @@ async function navigateTo(viewId){
     }
   }
 
+  if (viewId === 'register-view') {
+    document.getElementById('reg-form').style.display = 'block';
+    document.getElementById('reg-success').style.display = 'none';
+  }
   if (viewId === 'home-view') renderDashboard();
-  if (viewId === 'meetings-view') renderMeetingsList();
+  if (viewId === 'meetings-view') { meetingsPage = 1; renderMeetingsList(); }
   if (viewId === 'create-view') resetCreateForm();
   if (viewId === 'admin-view') renderAdminList();
-  if (viewId === 'history-view') renderHistoryList();
-  if (viewId === 'users-view') { await loadUsers(); await loadPasswordRequests(); renderUsersList(); renderPasswordRequests(); }
+  if (viewId === 'history-view') { historyPage = 1; renderHistoryList(); }
+  if (viewId === 'users-view') {
+    await loadUsers(); await loadPasswordRequests(); await loadPendingAccounts();
+    usersPage = 1; pwReqPage = 1;
+    renderUsersList(); renderPasswordRequests(); renderPendingAccounts();
+  }
   if (viewId === 'report-view') await loadReportIntoForm();
 }
 
@@ -883,21 +1057,22 @@ async function submitRegister(){
   const username = document.getElementById('reg-username').value.trim();
   const password = document.getElementById('reg-password').value;
   const confirm = document.getElementById('reg-confirm').value;
+  const accessLevel = Number(document.getElementById('reg-access-level').value);
 
   if (!name || !username || !password) return showToast('กรอกข้อมูลให้ครบทุกช่อง');
   if (password.length < 4) return showToast('รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร');
   if (password !== confirm) return showToast('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
 
   // สมัครสมาชิกเองได้แค่บทบาท "พนักงาน" เสมอ (เซิร์ฟเวอร์บังคับอยู่แล้ว ต่อให้ส่ง role มาก็ไม่มีผล)
-  let result;
+  // บัญชีใหม่จะเป็นสถานะ "รออนุมัติ" เสมอ — ยัง login ไม่ได้จนกว่าแอดมินจะอนุมัติ
   try {
-    result = await api('POST', '/api/auth/register', { name, username, password });
+    await api('POST', '/api/auth/register', { name, username, password, accessLevel });
   } catch (e) {
     showToast('สมัครสมาชิกไม่สำเร็จ: ' + e.message);
     return;
   }
-  showToast('สมัครสมาชิกสำเร็จ');
-  applyLoginResult(result);
+  document.getElementById('reg-form').style.display = 'none';
+  document.getElementById('reg-success').style.display = 'block';
 }
 
 /* ==========================================================================
@@ -1072,32 +1247,91 @@ function statusBadge(m){
   if (m.status === 'rejected') return '<span class="badge badge-danger">ถูกปฏิเสธ</span>';
   if (m.status === 'cancelled') return '<span class="badge badge-danger">ยกเลิกแล้ว</span>';
   if (m.status === 'completed') return '<span class="badge" style="background:var(--border);color:var(--text-muted);">เสร็จสิ้นแล้ว</span>';
-  if (m.confidential === 'ลับเฉพาะผู้เข้าร่วม') return '<span class="badge badge-info">ลับเฉพาะผู้เข้าร่วม</span>';
+  if (m.confidential === 'ลับ' || m.confidential === 'ลับมาก') return `<span class="badge badge-info">${m.confidential}</span>`;
   return '<span class="badge badge-accent">ยืนยันแล้ว</span>';
 }
 
 /* ==========================================================================
    ประวัติการประชุม (ทุกการประชุม รวมที่จบไปแล้ว) — ดูได้ทุก role
+   มีค้นหา/กรองวันที่/กรองสถานะ/กรองระดับความลับ/เรียงลำดับ + แบ่งหน้า 10 รายการ/หน้า
 ========================================================================== */
+const historyFilters = { search: '', from: '', to: '', status: 'all', confidential: 'all', sort: 'desc' };
+
+function onHistoryFilterChange(){
+  historyFilters.search = document.getElementById('hist-f-search').value.trim().toLowerCase();
+  historyFilters.from = document.getElementById('hist-f-from').value;
+  historyFilters.to = document.getElementById('hist-f-to').value;
+  historyFilters.status = document.getElementById('hist-f-status').value;
+  historyFilters.confidential = document.getElementById('hist-f-confidential').value;
+  historyFilters.sort = document.getElementById('hist-f-sort').value;
+  historyPage = 1;
+  renderHistoryList();
+}
+
+function resetHistoryFilters(){
+  document.getElementById('hist-f-search').value = '';
+  document.getElementById('hist-f-from').value = '';
+  document.getElementById('hist-f-to').value = '';
+  document.getElementById('hist-f-status').value = 'all';
+  document.getElementById('hist-f-confidential').value = 'all';
+  document.getElementById('hist-f-sort').value = 'desc';
+  onHistoryFilterChange();
+}
+
+function historyStatusMatches(m, filterVal){
+  if (filterVal === 'all') return true;
+  if (filterVal === 'cancelled') return m.status === 'cancelled' || m.status === 'rejected';
+  if (filterVal === 'unreported') return m.status === 'completed' && !m.reportFiled;
+  if (filterVal === 'reported') return m.status === 'completed' && m.reportFiled;
+  if (filterVal === 'upcoming') return m.status === 'confirmed' || m.status === 'pending';
+  return true;
+}
+
+function historyStatusBadge(m){
+  if (m.status === 'cancelled') return '<span class="badge badge-danger">ยกเลิกแล้ว</span>';
+  if (m.status === 'rejected') return '<span class="badge badge-danger">ถูกปฏิเสธ</span>';
+  if (m.status === 'completed') {
+    return m.reportFiled
+      ? '<span class="badge badge-accent">บันทึกรายงานแล้ว</span>'
+      : '<span class="badge badge-gold">ยังไม่บันทึกรายงาน</span>';
+  }
+  if (m.status === 'pending') return '<span class="badge badge-gold">รออนุมัติ</span>';
+  return '<span class="badge badge-accent">กำลังจะมาถึง</span>';
+}
+
 function renderHistoryList(){
+  let list = meetings.filter(m => {
+    if (historyFilters.search && !m.title.toLowerCase().includes(historyFilters.search)) return false;
+    if (historyFilters.from && m.date < historyFilters.from) return false;
+    if (historyFilters.to && m.date > historyFilters.to) return false;
+    if (!historyStatusMatches(m, historyFilters.status)) return false;
+    if (historyFilters.confidential !== 'all' && m.confidential !== historyFilters.confidential) return false;
+    return true;
+  });
+  list.sort((a, b) => {
+    const cmp = (a.date + a.time).localeCompare(b.date + b.time);
+    return historyFilters.sort === 'asc' ? cmp : -cmp;
+  });
+
+  document.getElementById('history-result-count').textContent = `พบ ${list.length} รายการ`;
+
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  historyPage = Math.min(Math.max(1, historyPage), totalPages);
+  const pageItems = list.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE);
+
   const el = document.getElementById('history-list');
-  const sorted = [...meetings].sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time)); // ล่าสุดก่อน
-  el.innerHTML = sorted.map(m => `
+  el.innerHTML = pageItems.map(m => `
     <div class="list-item" onclick="openMeetingDetail(${m.id})">
-      <div style="flex:1;">
+      <div style="flex:1;min-width:0;">
         <p class="ttl">${m.title}</p>
         <p class="sub">${m.date} • ${m.time} • ประธาน: ${m.chairName || '-'}</p>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-        ${statusBadge(m)}
-        ${m.status === 'completed'
-          ? (m.reportFiled
-              ? '<span class="badge badge-accent" style="font-size:10.5px;">📝 มีรายงานแล้ว</span>'
-              : '<span class="badge badge-gold" style="font-size:10.5px;">ยังไม่มีรายงาน</span>')
-          : ''}
-      </div>
+      ${historyStatusBadge(m)}
+      <span class="list-chevron">›</span>
     </div>
-  `).join('') || `<div class="empty">ยังไม่มีการประชุมในระบบ</div>`;
+  `).join('') || `<div class="empty">ไม่พบการประชุมตามเงื่อนไขที่กำหนด</div>`;
+
+  renderPager('history-pager', historyPage, totalPages, 'history');
 }
 
 /* ==========================================================================
@@ -1108,7 +1342,12 @@ function renderMeetingsList(){
   // ไม่โชว์การประชุมที่ "เสร็จสิ้นแล้ว" ในรายการหลัก (ถูก archive อัตโนมัติเมื่อหมดเวลา)
   // ยังดูย้อนหลังได้เสมอในแท็บ "ประวัติการประชุม" (history-view)
   const activeMeetings = meetings.filter(m => m.status !== 'completed');
-  el.innerHTML = activeMeetings.map(m => `
+
+  const totalPages = Math.max(1, Math.ceil(activeMeetings.length / PAGE_SIZE));
+  meetingsPage = Math.min(Math.max(1, meetingsPage), totalPages);
+  const pageItems = activeMeetings.slice((meetingsPage - 1) * PAGE_SIZE, meetingsPage * PAGE_SIZE);
+
+  el.innerHTML = pageItems.map(m => `
     <div class="list-item" onclick="openMeetingDetail(${m.id})">
       <div style="flex:1;">
         <p class="ttl">${m.title}</p>
@@ -1117,6 +1356,8 @@ function renderMeetingsList(){
       ${statusBadge(m)}
     </div>
   `).join('') || `<div class="empty">ยังไม่มีการประชุม</div>`;
+
+  renderPager('meetings-pager', meetingsPage, totalPages, 'meetings');
 }
 
 async function openMeetingDetail(id){
@@ -1133,7 +1374,7 @@ async function openMeetingDetail(id){
   document.getElementById('detail-body').innerHTML = `
     <div class="card" style="margin-bottom:14px;">
       <p class="section-title" style="margin-bottom:12px;">${statusBadge(m)}</p>
-      <p class="sub" style="margin:0 0 6px;">📅 ${m.date} เวลา ${m.time}</p>
+      <p class="sub" style="margin:0 0 6px;">📅 ${m.date} เวลา ${m.time}${m.endTime ? ' - ' + m.endTime : ''} น.</p>
       <p class="sub" style="margin:0 0 6px;">🗂️ รูปแบบ: ${m.type}${m.room ? ' • ห้อง ' + m.room : ''}</p>
       ${m.link ? `<p class="sub" style="margin:0 0 6px;">🔗 ลิงก์: ${m.link}</p>` : ''}
       <p class="sub" style="margin:0 0 6px;">🎙️ ประธาน: ${m.chairName || '-'}</p>
@@ -1320,6 +1561,7 @@ function resetCreateForm(){
   document.getElementById('f-title').value = editing ? editing.title : '';
   document.getElementById('f-date').value = editing ? editing.date : todayStr;
   document.getElementById('f-time').value = editing ? editing.time : '09:00';
+  document.getElementById('f-end-time').value = editing ? (editing.endTime || '') : '10:00';
   document.getElementById('f-link').value = editing ? editing.link : '';
   document.getElementById('f-confidential').value = editing ? editing.confidential : 'ทั่วไป';
   document.getElementById('f-chair').value = editing ? editing.chairName : '';
@@ -1348,6 +1590,11 @@ async function submitCreateMeeting(){
   const title = document.getElementById('f-title').value.trim();
   if (!title){ showToast('กรุณากรอกชื่อการประชุม'); return; }
 
+  const time = document.getElementById('f-time').value;
+  const endTime = document.getElementById('f-end-time').value;
+  if (!endTime){ showToast('กรุณากรอกเวลาจบการประชุม'); return; }
+  if (endTime <= time){ showToast('เวลาจบต้องอยู่หลังเวลาเริ่ม'); return; }
+
   const type = document.querySelector('#type-seg button.active').dataset.val;
   const needsRoom = (type !== 'Online');
   const isEditing = !!editingMeetingId;
@@ -1355,7 +1602,8 @@ async function submitCreateMeeting(){
   const fields = {
     title,
     date: document.getElementById('f-date').value,
-    time: document.getElementById('f-time').value,
+    time,
+    endTime,
     type,
     room: needsRoom ? document.getElementById('f-room').value : '',
     link: (type !== 'Onsite') ? document.getElementById('f-link').value : '',
@@ -1462,15 +1710,23 @@ async function rejectMeeting(id){
    ADMIN - จัดการผู้ใช้ (เฉพาะแอดมิน)
    ระบบ "ลืมรหัสผ่าน" ของแอปนี้คือให้แอดมินรีเซ็ตรหัสผ่านให้โดยตรง (ไม่มีอีเมล)
 ========================================================================== */
+const ACCESS_LEVEL_LABEL = { 1: 'ระดับ 1 (สูงสุด)', 2: 'ระดับ 2', 3: 'ระดับ 3' };
+const ACCOUNT_STATUS_LABEL = { pending: 'รออนุมัติ', active: 'ใช้งานอยู่', rejected: 'ถูกปฏิเสธ' };
+
 function renderUsersList(){
   const el = document.getElementById('users-list');
   const roleLabel = { employee: 'พนักงาน', admin: 'แอดมิน' };
-  el.innerHTML = allUsers.map(u => `
+
+  const totalPages = Math.max(1, Math.ceil(allUsers.length / PAGE_SIZE));
+  usersPage = Math.min(Math.max(1, usersPage), totalPages);
+  const pageItems = allUsers.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
+
+  el.innerHTML = pageItems.map(u => `
     <div class="list-item" style="cursor:default;flex-direction:column;align-items:stretch;gap:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <p class="ttl">${u.name}${u.user_id === (currentUser && currentUser.user_id) ? ' (คุณ)' : ''}</p>
-          <p class="sub">@${u.username}</p>
+          <p class="sub">@${u.username} • ${ACCESS_LEVEL_LABEL[u.access_level] || '-'}${u.account_status !== 'active' ? ' • ' + (ACCOUNT_STATUS_LABEL[u.account_status] || u.account_status) : ''}</p>
         </div>
         <span class="badge ${u.role === 'admin' ? 'badge-info' : 'badge-accent'}">${roleLabel[u.role] || u.role}</span>
       </div>
@@ -1478,21 +1734,86 @@ function renderUsersList(){
         <button class="btn btn-outline btn-sm" style="width:auto;flex:1;" onclick="toggleUserRole(${u.user_id}, '${u.role}')">
           ${u.role === 'admin' ? 'ลดเป็นพนักงาน' : 'ตั้งเป็นแอดมิน'}
         </button>
+        <button class="btn btn-outline btn-sm" style="width:auto;flex:1;" onclick="setAccessLevel(${u.user_id}, ${u.access_level}, '${escapeJs(u.name)}')">ตั้งระดับการเข้าถึง</button>
         <button class="btn btn-outline btn-sm" style="width:auto;flex:1;" onclick="resetUserPassword(${u.user_id}, '${escapeJs(u.name)}')">รีเซ็ตรหัสผ่าน</button>
         <button class="btn btn-danger-outline btn-sm" style="width:auto;flex:1;" onclick="deleteUser(${u.user_id}, '${escapeJs(u.name)}')">ลบ</button>
       </div>
     </div>
   `).join('') || `<div class="empty">ยังไม่มีผู้ใช้ในระบบ</div>`;
+
+  renderPager('users-pager', usersPage, totalPages, 'users');
+}
+
+async function setAccessLevel(userId, currentLevel, name){
+  const input = prompt(`ตั้งระดับการเข้าถึงชั้นความลับให้ "${name}" — กรอก 1, 2 หรือ 3 (ปัจจุบัน: ${currentLevel}):`, String(currentLevel));
+  if (!input) return;
+  const level = Number(input.trim());
+  if (![1, 2, 3].includes(level)) return showToast('กรุณากรอก 1, 2 หรือ 3 เท่านั้น');
+  try {
+    await api('PUT', `/api/users/${userId}/access-level`, { accessLevel: level });
+    showToast('ตั้งระดับการเข้าถึงสำเร็จ');
+    await loadUsers();
+    renderUsersList();
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
 }
 
 function escapeJs(str){ return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+/* ==========================================================================
+   บัญชีใหม่ที่รอการอนุมัติ (สมัครเองผ่านหน้า register — ยัง login ไม่ได้จนกว่าจะอนุมัติ)
+========================================================================== */
+function renderPendingAccounts(){
+  const el = document.getElementById('pending-accounts-list');
+  el.innerHTML = pendingAccounts.map(p => `
+    <div class="list-item" style="cursor:default;flex-direction:column;align-items:stretch;gap:10px;">
+      <div>
+        <p class="ttl">${p.name}</p>
+        <p class="sub">@${p.username} • ขอระดับการเข้าถึง: ${ACCESS_LEVEL_LABEL[p.access_level] || p.access_level}</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-accent btn-sm" onclick="approveAccount(${p.user_id})">อนุมัติ</button>
+        <button class="btn btn-danger-outline btn-sm" onclick="rejectAccount(${p.user_id})">ปฏิเสธ</button>
+      </div>
+    </div>
+  `).join('') || `<div class="empty">ไม่มีบัญชีที่รอการอนุมัติ</div>`;
+}
+
+async function approveAccount(userId){
+  try {
+    await api('POST', `/api/users/${userId}/approve-account`);
+    showToast('อนุมัติบัญชีแล้ว');
+    await loadPendingAccounts(); await loadUsers();
+    renderPendingAccounts(); renderUsersList();
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+async function rejectAccount(userId){
+  if (!confirm('ยืนยันปฏิเสธบัญชีนี้? บัญชีจะไม่สามารถเข้าสู่ระบบได้')) return;
+  try {
+    await api('POST', `/api/users/${userId}/reject-account`);
+    showToast('ปฏิเสธบัญชีแล้ว');
+    await loadPendingAccounts(); await loadUsers();
+    renderPendingAccounts(); renderUsersList();
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
 
 /* ==========================================================================
    คำขอรีเซ็ตรหัสผ่านที่รอดำเนินการ (ส่วนหนึ่งของหน้า "จัดการผู้ใช้" — เฉพาะแอดมิน)
 ========================================================================== */
 function renderPasswordRequests(){
   const el = document.getElementById('password-requests-list');
-  el.innerHTML = passwordRequests.map(r => `
+
+  const totalPages = Math.max(1, Math.ceil(passwordRequests.length / PAGE_SIZE));
+  pwReqPage = Math.min(Math.max(1, pwReqPage), totalPages);
+  const pageItems = passwordRequests.slice((pwReqPage - 1) * PAGE_SIZE, pwReqPage * PAGE_SIZE);
+
+  el.innerHTML = pageItems.map(r => `
     <div class="list-item" style="cursor:default;">
       <div style="flex:1;">
         <p class="ttl">${r.name}</p>
@@ -1501,6 +1822,8 @@ function renderPasswordRequests(){
       <button class="btn btn-accent btn-sm" style="width:auto;padding:0 14px;" onclick="resolvePasswordRequest(${r.request_id}, '${escapeJs(r.name)}')">ตั้งรหัสผ่านใหม่</button>
     </div>
   `).join('') || `<div class="empty">ไม่มีคำขอที่รอดำเนินการ</div>`;
+
+  renderPager('pwreq-pager', pwReqPage, totalPages, 'pwreq');
 }
 
 async function resolvePasswordRequest(requestId, name){
@@ -1522,17 +1845,19 @@ async function submitCreateUser(){
   const username = document.getElementById('nu-username').value.trim();
   const password = document.getElementById('nu-password').value;
   const role = document.querySelector('#nu-role-seg button.active').dataset.val;
+  const accessLevel = Number(document.querySelector('#nu-access-seg button.active').dataset.val);
 
   if (!name || !username || !password) return showToast('กรอกข้อมูลให้ครบทุกช่อง');
   if (password.length < 4) return showToast('รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร');
 
   try {
-    await api('POST', '/api/users', { name, username, password, role });
+    await api('POST', '/api/users', { name, username, password, role, accessLevel });
     showToast('เพิ่มผู้ใช้สำเร็จ');
     document.getElementById('nu-name').value = '';
     document.getElementById('nu-username').value = '';
     document.getElementById('nu-password').value = '';
     pickSeg('nu-role-seg', document.querySelector('#nu-role-seg button[data-val="employee"]'));
+    pickSeg('nu-access-seg', document.querySelector('#nu-access-seg button[data-val="3"]'));
     await loadUsers();
     renderUsersList();
   } catch (e) {

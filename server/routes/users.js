@@ -40,20 +40,30 @@ async function countAdmins() {
   return result.rows[0].n;
 }
 
+const VALID_ACCESS_LEVELS = [1, 2, 3];
+
 // GET /api/users — รายชื่อผู้ใช้ทั้งหมด (ไม่ส่ง password hash/salt กลับไป)
 router.get('/', asyncHandler(async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
-  const result = await db.execute('SELECT user_id, username, name, role FROM users ORDER BY user_id');
+  const result = await db.execute('SELECT user_id, username, name, role, access_level, account_status FROM users ORDER BY user_id');
   res.json(result.rows);
 }));
 
-// POST /api/users  body: { username, password, name, role }
+// GET /api/users/pending-accounts — บัญชีที่สมัครเองแล้วรอแอดมินอนุมัติ (ยัง login ไม่ได้)
+router.get('/pending-accounts', asyncHandler(async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+  const result = await db.execute("SELECT user_id, username, name, access_level FROM users WHERE account_status = 'pending' ORDER BY user_id ASC");
+  res.json(result.rows);
+}));
+
+// POST /api/users  body: { username, password, name, role, accessLevel }
 router.post('/', asyncHandler(async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  const { username, password, name, role } = req.body || {};
+  const { username, password, name, role, accessLevel } = req.body || {};
   if (!username || !password || !name || !role) {
     return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ (ชื่อผู้ใช้, รหัสผ่าน, ชื่อ, บทบาท)' });
   }
@@ -63,18 +73,78 @@ router.post('/', asyncHandler(async (req, res) => {
   if (String(password).length < 4) {
     return res.status(400).json({ error: 'รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร' });
   }
+  const level = VALID_ACCESS_LEVELS.includes(Number(accessLevel)) ? Number(accessLevel) : 3;
 
   const existingResult = await db.execute({ sql: 'SELECT user_id FROM users WHERE username = ?', args: [username] });
   if (existingResult.rows[0]) return res.status(409).json({ error: 'ชื่อผู้ใช้นี้มีคนใช้แล้ว ลองชื่ออื่น' });
 
   const salt = randomSalt();
   const passwordHash = hashPassword(password, salt);
+  // แอดมินเป็นคนสร้างให้โดยตรง = อนุมัติอยู่แล้วในตัว (account_status = 'active' ทันที)
   const insertResult = await db.execute({
-    sql: 'INSERT INTO users (username, password_hash, password_salt, name, role) VALUES (?, ?, ?, ?, ?)',
-    args: [username, passwordHash, salt, name.trim(), role],
+    sql: `INSERT INTO users (username, password_hash, password_salt, name, role, access_level, account_status)
+          VALUES (?, ?, ?, ?, ?, ?, 'active')`,
+    args: [username, passwordHash, salt, name.trim(), role, level],
   });
 
-  res.status(201).json({ user_id: insertResult.lastInsertRowid, username, name: name.trim(), role });
+  res.status(201).json({ user_id: insertResult.lastInsertRowid, username, name: name.trim(), role, access_level: level, account_status: 'active' });
+}));
+
+// POST /api/users/:id/approve-account — อนุมัติบัญชีที่สมัครเองและรออยู่
+router.post('/:id/approve-account', asyncHandler(async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const targetId = Number(req.params.id);
+  const targetResult = await db.execute({ sql: 'SELECT * FROM users WHERE user_id = ?', args: [targetId] });
+  const target = targetResult.rows[0];
+  if (!target) return res.status(404).json({ error: 'ไม่พบผู้ใช้นี้' });
+  if (target.account_status !== 'pending') {
+    return res.status(400).json({ error: 'บัญชีนี้ไม่ได้อยู่ในสถานะรออนุมัติแล้ว' });
+  }
+
+  await db.execute({ sql: "UPDATE users SET account_status = 'active' WHERE user_id = ?", args: [targetId] });
+  await db.execute({
+    sql: 'INSERT INTO notifications (title, message, user_id) VALUES (?, ?, ?)',
+    args: ['บัญชีของคุณได้รับการอนุมัติแล้ว', 'เข้าสู่ระบบได้เลยตอนนี้', targetId],
+  });
+
+  res.json({ ok: true });
+}));
+
+// POST /api/users/:id/reject-account — ปฏิเสธบัญชีที่สมัครเองและรออยู่
+router.post('/:id/reject-account', asyncHandler(async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const targetId = Number(req.params.id);
+  const targetResult = await db.execute({ sql: 'SELECT * FROM users WHERE user_id = ?', args: [targetId] });
+  const target = targetResult.rows[0];
+  if (!target) return res.status(404).json({ error: 'ไม่พบผู้ใช้นี้' });
+  if (target.account_status !== 'pending') {
+    return res.status(400).json({ error: 'บัญชีนี้ไม่ได้อยู่ในสถานะรออนุมัติแล้ว' });
+  }
+
+  await db.execute({ sql: "UPDATE users SET account_status = 'rejected' WHERE user_id = ?", args: [targetId] });
+  res.json({ ok: true });
+}));
+
+// PUT /api/users/:id/access-level  body: { accessLevel }
+router.put('/:id/access-level', asyncHandler(async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const targetId = Number(req.params.id);
+  const level = Number((req.body || {}).accessLevel);
+  if (!VALID_ACCESS_LEVELS.includes(level)) {
+    return res.status(400).json({ error: 'ระดับการเข้าถึงต้องเป็น 1, 2 หรือ 3 เท่านั้น' });
+  }
+
+  const targetResult = await db.execute({ sql: 'SELECT user_id FROM users WHERE user_id = ?', args: [targetId] });
+  if (!targetResult.rows[0]) return res.status(404).json({ error: 'ไม่พบผู้ใช้นี้' });
+
+  await db.execute({ sql: 'UPDATE users SET access_level = ? WHERE user_id = ?', args: [level, targetId] });
+  res.json({ ok: true });
 }));
 
 // PUT /api/users/:id/role  body: { role }

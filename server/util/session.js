@@ -20,7 +20,7 @@ async function getCurrentUser(req) {
 
   const result = await db.execute({
     sql: `
-      SELECT u.user_id, u.username, u.name, u.role
+      SELECT u.user_id, u.username, u.name, u.role, u.access_level, u.account_status
       FROM sessions s
       JOIN users u ON u.user_id = s.user_id
       WHERE s.token = ?

@@ -94,6 +94,33 @@ async function migrate() {
   if ((await tableExists('notifications')) && !(await columnExists('notifications', 'user_id'))) {
     await driver.execute('ALTER TABLE notifications ADD COLUMN user_id INTEGER REFERENCES users(user_id)');
   }
+
+  // ----------------------------------------------------------------------------
+  // 0d) migration (รอบ 2: เวลาจบประชุม, ระดับการเข้าถึงชั้นความลับ, อนุมัติบัญชีใหม่):
+  //   - meetings.end_time: เวลาจบจริง (ก่อนหน้านี้สมมติว่าประชุม 2 ชม. เสมอ —
+  //     ดู util/meeting-lifecycle.js) ปล่อยเป็น NULL ได้สำหรับการประชุมเก่าที่มีอยู่
+  //     ก่อนฟีเจอร์นี้ (ระบบจะ fallback ไปใช้เวลาสมมติแบบเดิมให้อัตโนมัติ)
+  //   - users.access_level: ระดับการเข้าถึงชั้นความลับของบัญชี (1=สูงสุดเห็นหมด,
+  //     2=เห็นถึง "ลับ", 3=เห็นแค่ "ทั่วไป") บัญชีเดิมที่มีอยู่ก่อนฟีเจอร์นี้ set
+  //     เป็น 1 (เห็นทุกอย่างเหมือนเดิม) กันไม่ให้ถูกบล็อกมองไม่เห็นข้อมูลที่เคยเห็นได้
+  //   - users.account_status: 'pending' (รอแอดมินอนุมัติ) / 'active' / 'rejected'
+  //     บัญชีเดิมทั้งหมด set เป็น 'active' (ใช้งานได้ต่อเนื่องเหมือนเดิม ไม่ต้องรอ
+  //     อนุมัติย้อนหลัง) — มีผลเฉพาะบัญชีที่สมัครเองใหม่หลังจากนี้เท่านั้น
+  //   - normalize ค่าระดับความลับเก่า "ลับเฉพาะผู้เข้าร่วม" ให้เป็นค่าใหม่ 1 ใน 3
+  //     ระดับคงที่ (ทั่วไป/ลับ/ลับมาก) เพื่อให้ตรรกะสิทธิ์เข้าถึงทำงานถูกต้อง
+  // ----------------------------------------------------------------------------
+  if ((await tableExists('meetings')) && !(await columnExists('meetings', 'end_time'))) {
+    await driver.execute('ALTER TABLE meetings ADD COLUMN end_time TEXT');
+  }
+  if ((await tableExists('users')) && !(await columnExists('users', 'access_level'))) {
+    await driver.execute('ALTER TABLE users ADD COLUMN access_level INTEGER NOT NULL DEFAULT 1');
+  }
+  if ((await tableExists('users')) && !(await columnExists('users', 'account_status'))) {
+    await driver.execute("ALTER TABLE users ADD COLUMN account_status TEXT NOT NULL DEFAULT 'active'");
+  }
+  if (await tableExists('meetings')) {
+    await driver.execute("UPDATE meetings SET confidential_level = 'ลับ' WHERE confidential_level = 'ลับเฉพาะผู้เข้าร่วม'");
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -106,7 +133,9 @@ const SCHEMA_STATEMENTS = [
     password_hash  TEXT NOT NULL,
     password_salt  TEXT NOT NULL,
     name           TEXT NOT NULL,
-    role           TEXT NOT NULL CHECK (role IN ('employee','organizer','admin'))
+    role           TEXT NOT NULL CHECK (role IN ('employee','organizer','admin')),
+    access_level   INTEGER NOT NULL DEFAULT 1,
+    account_status TEXT NOT NULL DEFAULT 'active' CHECK (account_status IN ('pending','active','rejected'))
   )`,
   // session ที่เกิดขึ้นตอน login/register สำเร็จ — หน้าเว็บแนบ token นี้มาทุก
   // request เพื่อบอกว่า "ฉันคือใคร" (ดู util/session.js)
@@ -126,6 +155,7 @@ const SCHEMA_STATEMENTS = [
     title               TEXT NOT NULL,
     meeting_date        TEXT NOT NULL,
     start_time          TEXT NOT NULL,
+    end_time            TEXT,
     meeting_type        TEXT NOT NULL CHECK (meeting_type IN ('Online','Onsite','Hybrid')),
     confidential_level  TEXT NOT NULL DEFAULT 'ทั่วไป',
     meeting_link        TEXT,
@@ -184,6 +214,16 @@ const SCHEMA_STATEMENTS = [
     created_by    INTEGER REFERENCES users(user_id),
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  // บันทึกว่า "ฉัน" (user_id) ปิด/ล้างการแจ้งเตือนแถวไหนไปแล้วบ้าง — ไม่ลบแถวจริง
+  // ในตาราง notifications ทิ้ง เพราะแจ้งเตือนกว้างๆ (user_id ของ notifications เป็น
+  // NULL) ยังต้องโชว์ให้คนอื่นที่ยังไม่เห็นอยู่ด้วย การปิด/ล้างของแต่ละคนจึงต้อง
+  // แยกเก็บเป็นรายคน ไม่กระทบคนอื่น
+  `CREATE TABLE IF NOT EXISTS notification_dismissals (
+    notif_id      INTEGER NOT NULL REFERENCES notifications(notif_id),
+    user_id       INTEGER NOT NULL REFERENCES users(user_id),
+    dismissed_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (notif_id, user_id)
   )`,
 ];
 
@@ -282,7 +322,7 @@ async function seed() {
 
     const m3 = await insertMeeting({
       title: 'สัมภาษณ์ผู้สมัคร', meeting_date: today, start_time: '13:00',
-      meeting_type: 'Online', confidential_level: 'ลับเฉพาะผู้เข้าร่วม',
+      meeting_type: 'Online', confidential_level: 'ลับ',
       meeting_link: 'https://meet.google.com/xyz-1234', organizer_id: creatorId,
       chair_name: 'หัวหน้าฝ่ายบุคคล', status: 'scheduled',
     });

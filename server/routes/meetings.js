@@ -10,6 +10,23 @@ const { sendDueReminders, archiveEndedMeetings } = require('../util/meeting-life
 const router = express.Router();
 
 // ----------------------------------------------------------------------------
+// ระดับชั้นความลับ 3 ระดับคงที่ + สิทธิ์การเข้าถึงของผู้ใช้ (access_level 1-3
+// บนตาราง users — 1 คือสูงสุดมองเห็นได้ทุกระดับ, 3 คือต่ำสุดเห็นได้แค่ "ทั่วไป")
+//   CONFIDENTIAL_RANK: ยิ่งตัวเลขมาก ยิ่งเป็นระดับที่ "ไม่ลับ" มาก (เห็นง่าย)
+//   กฎ: ผู้ใช้เห็นการประชุมได้ก็ต่อเมื่อ user.access_level <= rank ของระดับนั้น
+//   แอดมินเห็นได้ทุกการประชุมเสมอ ไม่ติดเงื่อนไขนี้
+// ----------------------------------------------------------------------------
+const CONFIDENTIAL_LEVELS = ['ทั่วไป', 'ลับ', 'ลับมาก'];
+const CONFIDENTIAL_RANK = { 'ทั่วไป': 3, 'ลับ': 2, 'ลับมาก': 1 };
+
+function canSeeConfidential(user, level) {
+  if (user && user.role === 'admin') return true;
+  const userLevel = user ? Number(user.access_level) || 3 : 3;
+  const rank = Object.prototype.hasOwnProperty.call(CONFIDENTIAL_RANK, level) ? CONFIDENTIAL_RANK[level] : 1; // ค่าที่ไม่รู้จัก ถือว่าลับสุด (ปลอดภัยไว้ก่อน)
+  return userLevel <= rank;
+}
+
+// ----------------------------------------------------------------------------
 // helper: รวมสถานะของ "การประชุม" (meetings.status) กับสถานะของ "การจองห้อง"
 // (bookings.status) ให้เป็นสถานะเดียวที่หน้าเว็บใช้แสดงผล เช่น badge
 //   - ถ้าการประชุมถูกยกเลิก             -> cancelled
@@ -28,7 +45,7 @@ function overallStatus(row) {
 
 const LIST_SQL = `
   SELECT
-    m.meeting_id, m.title, m.meeting_date, m.start_time, m.meeting_type,
+    m.meeting_id, m.title, m.meeting_date, m.start_time, m.end_time, m.meeting_type,
     m.confidential_level, m.meeting_link, m.status AS meeting_status,
     m.organizer_id, m.chair_name,
     b.booking_id, b.room_id, b.status AS booking_status,
@@ -49,6 +66,7 @@ function shapeRow(row, participants) {
     title: row.title,
     date: row.meeting_date,
     time: row.start_time,
+    endTime: row.end_time || '',
     type: row.meeting_type,
     room: row.room_id || '',
     roomName: row.room_name || '',
@@ -88,17 +106,24 @@ router.get('/', asyncHandler(async (req, res) => {
   await archiveEndedMeetings();
   await sendDueReminders();
 
+  const user = await getCurrentUser(req);
   const listResult = await db.execute(LIST_SQL);
+  const visibleRows = listResult.rows.filter((row) => canSeeConfidential(user, row.confidential_level));
   const meetings = await Promise.all(
-    listResult.rows.map(async (row) => shapeRow(row, await getParticipants(row.meeting_id)))
+    visibleRows.map(async (row) => shapeRow(row, await getParticipants(row.meeting_id)))
   );
   res.json(meetings);
 }));
 
 // GET /api/meetings/:id — รายละเอียดการประชุมเดียว
+// (ถ้าระดับการเข้าถึงไม่พอ ตอบ 404 เหมือนไม่มีการประชุมนี้อยู่ — ไม่บอกว่ามีแต่ดูไม่ได้
+// เพื่อไม่ให้รู้ว่ามีการประชุมลับอยู่ตรงนั้นทั้งที่เข้าไม่ถึง)
 router.get('/:id', asyncHandler(async (req, res) => {
+  const user = await getCurrentUser(req);
   const row = await getOneRow(req.params.id);
-  if (!row) return res.status(404).json({ error: 'ไม่พบการประชุมนี้' });
+  if (!row || !canSeeConfidential(user, row.confidential_level)) {
+    return res.status(404).json({ error: 'ไม่พบการประชุมนี้' });
+  }
   res.json(shapeRow(row, await getParticipants(row.meeting_id)));
 }));
 
@@ -110,16 +135,22 @@ router.post('/', asyncHandler(async (req, res) => {
   const user = await getCurrentUser(req);
   if (!user) return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบก่อนสร้างการประชุม' });
 
-  const { title, date, time, type, room, link, confidential, chairName } = req.body;
+  const { title, date, time, endTime, type, room, link, confidential, chairName } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'กรุณากรอกชื่อการประชุม' });
+
+  let confidentialLevel = (confidential || 'ทั่วไป').trim();
+  if (!CONFIDENTIAL_LEVELS.includes(confidentialLevel)) confidentialLevel = 'ทั่วไป';
+  if (!canSeeConfidential(user, confidentialLevel)) {
+    return res.status(403).json({ error: 'คุณไม่มีสิทธิ์สร้างการประชุมระดับความลับนี้ (สูงกว่าระดับการเข้าถึงของคุณ)' });
+  }
 
   const needsRoom = type !== 'Online';
 
   const insertResult = await db.execute({
-    sql: `INSERT INTO meetings (title, meeting_date, start_time, meeting_type, confidential_level, meeting_link, organizer_id, chair_name, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')`,
+    sql: `INSERT INTO meetings (title, meeting_date, start_time, end_time, meeting_type, confidential_level, meeting_link, organizer_id, chair_name, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')`,
     args: [
-      title.trim(), date, time, type, confidential || 'ทั่วไป',
+      title.trim(), date, time, (endTime || '').trim() || null, type, confidentialLevel,
       needsRoom ? '' : (link || ''), user.user_id, (chairName || '').trim(),
     ],
   });
@@ -150,13 +181,19 @@ router.put('/:id', asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'แก้ไขได้เฉพาะการประชุมที่คุณเป็นผู้สร้าง หรือต้องเป็นแอดมิน' });
   }
 
-  const { title, date, time, type, room, link, confidential, chairName } = req.body;
+  const { title, date, time, endTime, type, room, link, confidential, chairName } = req.body;
   const needsRoom = type !== 'Online';
 
+  let confidentialLevel = (confidential || 'ทั่วไป').trim();
+  if (!CONFIDENTIAL_LEVELS.includes(confidentialLevel)) confidentialLevel = 'ทั่วไป';
+  if (!canSeeConfidential(user, confidentialLevel)) {
+    return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ตั้งระดับความลับนี้ (สูงกว่าระดับการเข้าถึงของคุณ)' });
+  }
+
   await db.execute({
-    sql: `UPDATE meetings SET title=?, meeting_date=?, start_time=?, meeting_type=?,
+    sql: `UPDATE meetings SET title=?, meeting_date=?, start_time=?, end_time=?, meeting_type=?,
           confidential_level=?, meeting_link=?, chair_name=? WHERE meeting_id=?`,
-    args: [title.trim(), date, time, type, confidential || 'ทั่วไป', needsRoom ? '' : (link || ''), (chairName || '').trim(), meetingId],
+    args: [title.trim(), date, time, (endTime || '').trim() || null, type, confidentialLevel, needsRoom ? '' : (link || ''), (chairName || '').trim(), meetingId],
   });
 
   const existingBookingResult = await db.execute({ sql: 'SELECT * FROM bookings WHERE meeting_id = ?', args: [meetingId] });
