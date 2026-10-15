@@ -80,6 +80,20 @@ async function migrate() {
   if ((await tableExists('participants')) && !(await columnExists('participants', 'position'))) {
     await driver.execute("ALTER TABLE participants ADD COLUMN position TEXT DEFAULT ''");
   }
+
+  // ----------------------------------------------------------------------------
+  // 0c) migration (เพิ่มระบบแจ้งเตือน/รายงานประชุม/ลืมรหัสผ่าน): เพิ่มคอลัมน์ใหม่
+  //    แบบไม่ทำลายข้อมูลเดิม + สร้างตารางใหม่ (ไม่กระทบตารางเดิมที่มีอยู่แล้ว)
+  //   - meetings.reminder_sent: กันแจ้งเตือน "ใกล้ถึงเวลาประชุม" ซ้ำ (ดู util/meeting-lifecycle.js)
+  //   - notifications.user_id: NULL = แจ้งเตือนกว้างๆ (เหมือนเดิม), มีค่า = แจ้งเตือน
+  //     เฉพาะคนคนนั้น (เช่น เตือนประชุม/เตือนให้ลงรายงาน จะส่งถึงแค่เจ้าของการประชุม)
+  // ----------------------------------------------------------------------------
+  if ((await tableExists('meetings')) && !(await columnExists('meetings', 'reminder_sent'))) {
+    await driver.execute('ALTER TABLE meetings ADD COLUMN reminder_sent INTEGER NOT NULL DEFAULT 0');
+  }
+  if ((await tableExists('notifications')) && !(await columnExists('notifications', 'user_id'))) {
+    await driver.execute('ALTER TABLE notifications ADD COLUMN user_id INTEGER REFERENCES users(user_id)');
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -117,6 +131,7 @@ const SCHEMA_STATEMENTS = [
     meeting_link        TEXT,
     organizer_id        INTEGER REFERENCES users(user_id),
     chair_name          TEXT DEFAULT '',
+    reminder_sent       INTEGER NOT NULL DEFAULT 0,
     status              TEXT NOT NULL DEFAULT 'scheduled'
                           CHECK (status IN ('scheduled','cancelled','completed'))
   )`,
@@ -138,12 +153,37 @@ const SCHEMA_STATEMENTS = [
                         CHECK (check_in_status IN ('not_checked_in','checked_in')),
     check_in_time     TEXT
   )`,
+  // user_id: NULL = แจ้งเตือนกว้างๆ ให้ทุกคนที่ login อยู่เห็น (เหมือนเดิม),
+  // มีค่า = แจ้งเตือนเฉพาะคนคนนั้น (เช่น เตือนใกล้ถึงเวลาประชุม/เตือนลงรายงาน)
   `CREATE TABLE IF NOT EXISTS notifications (
     notif_id    INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT NOT NULL,
     message     TEXT NOT NULL,
+    user_id     INTEGER REFERENCES users(user_id),
     is_read     INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  // คำขอ "ลืมรหัสผ่าน" — ไม่มีระบบอีเมล จึงให้พนักงานกดขอแล้วแอดมินเป็นคนตั้ง
+  // รหัสผ่านใหม่ให้แทน (ดู routes/password-reset.js) สถานะ pending -> resolved
+  `CREATE TABLE IF NOT EXISTS password_reset_requests (
+    request_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL REFERENCES users(user_id),
+    status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','resolved')),
+    requested_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at   TEXT,
+    resolved_by   INTEGER REFERENCES users(user_id)
+  )`,
+  // รายงานสรุปผลการประชุม — 1 การประชุม มีได้ 1 รายงาน (UNIQUE meeting_id) แก้ไข
+  // ซ้ำได้เรื่อยๆ (upsert ใน routes/reports.js) — มีแถวในตารางนี้ = "ลงรายงานแล้ว"
+  `CREATE TABLE IF NOT EXISTS meeting_reports (
+    report_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_id    INTEGER NOT NULL UNIQUE REFERENCES meetings(meeting_id),
+    summary       TEXT NOT NULL DEFAULT '',
+    resolutions   TEXT NOT NULL DEFAULT '',
+    action_items  TEXT NOT NULL DEFAULT '',
+    created_by    INTEGER REFERENCES users(user_id),
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
 ];
 

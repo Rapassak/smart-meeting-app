@@ -16,6 +16,8 @@ const checkinRoutes = require('./routes/checkin');
 const notificationRoutes = require('./routes/notifications');
 const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
+const passwordResetRoutes = require('./routes/password-reset');
+const reportRoutes = require('./routes/reports');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +33,8 @@ app.use('/api/checkin', checkinRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/password-reset', passwordResetRoutes);
+app.use('/api/reports', reportRoutes);
 
 // ----- หน้าเช็คอินจากการสแกน QR Code (ไม่ต้อง login) -----
 // QR ที่สร้างขึ้นจะพาไปที่ /checkin/<meetingId> — ต้องเสิร์ฟ index.html ตัวเดียวกับ

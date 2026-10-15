@@ -79,6 +79,29 @@
     flex-direction:column;
     overflow:hidden;
     position:relative;
+    min-width:0; /* กัน flex item ดันความกว้างเกินพื้นที่จริงตอนมี sidebar ข้างๆ */
+  }
+
+  /* ===================== จอใหญ่จริงๆ (คอม/จอมอนิเตอร์): เว็บเต็มจอ Browser
+     เลย ไม่ใช่การ์ดแคบๆ ตรงกลางเหมือนเปิดจากมือถือ + มีเมนูด้านข้าง (sidebar)
+     แทนเมนูด้านล่าง — ฟีเจอร์/หน้าทุกอย่างเหมือนเดิมทุกประการ ต่างกันแค่การจัดวาง ===================== */
+  @media (min-width:1024px){
+    .app-shell{ padding:0; align-items:stretch; }
+    .phone{
+      width:100vw; height:100vh; max-width:none;
+      border-radius:0; box-shadow:none;
+      flex-direction:row;
+    }
+    #bottom-nav{ display:none !important; }
+    #sidebar-nav{ display:flex; }
+    .content{ padding-bottom:28px; }
+    .app-header{ padding:28px 36px 20px; }
+    .pad{ padding:24px 36px 36px; max-width:1040px; }
+  }
+  /* บนมือถือ/แท็บเล็ตแคบ sidebar ต้องไม่โผล่มาเด็ดขาด ไม่ว่า JS จะตั้งค่า
+     display ไว้แบบไหนก็ตาม (ใช้ !important กันค่าที่ตั้งผ่าน JS) */
+  @media (max-width:1023px){
+    #sidebar-nav{ display:none !important; }
   }
 
   /* ===================== HEADER ===================== */
@@ -189,6 +212,31 @@
   #bottom-nav button.active{ color:var(--accent-dark); font-weight:600; }
   #bottom-nav .hidden-admin-only{ display:none; }
 
+  /* ===================== SIDEBAR NAV (จอใหญ่เท่านั้น ดู media query ด้านบน) =====================
+     เมนูเดียวกับ bottom-nav ทุกประการ (data-target, onclick, class ใช้ร่วมกัน)
+     แค่จัดวางแนวตั้งแทน — JS sync สถานะ active/ซ่อนเมนูแอดมินให้ทั้งสองที่พร้อมกัน */
+  #sidebar-nav{
+    display:none; /* เปิดจาก JS ตอน login (เหมือน bottom-nav) + บังคับผ่าน media query */
+    flex-direction:column; flex-shrink:0; width:230px;
+    background:var(--ink); padding:22px 14px; gap:3px; overflow-y:auto;
+  }
+  #sidebar-nav .side-logo{
+    font-family:'Kanit',sans-serif; font-weight:600; font-size:16.5px; color:#fff;
+    margin:2px 10px 22px; line-height:1.3;
+  }
+  #sidebar-nav .side-logo span{ display:block; font-size:11.5px; font-weight:400; color:#B9C2D6; margin-top:2px; }
+  #sidebar-nav button{
+    display:flex; align-items:center; gap:13px; background:none; border:none; cursor:pointer;
+    color:#B9C2D6; font-family:'Noto Sans Thai',sans-serif; font-size:14px;
+    padding:11px 12px; border-radius:10px; text-align:left; width:100%;
+  }
+  #sidebar-nav button svg{ width:19px; height:19px; stroke-width:1.8; flex-shrink:0; }
+  #sidebar-nav button:hover{ background:rgba(255,255,255,.07); color:#fff; }
+  #sidebar-nav button.active{ background:rgba(255,255,255,.14); color:#fff; font-weight:600; }
+  #sidebar-nav .hidden-admin-only{ display:none; }
+  #sidebar-nav .side-logout{ margin-top:auto; color:#E3B2A6; }
+  #sidebar-nav .side-logout:hover{ background:rgba(179,67,46,.18); color:#fff; }
+
   /* ===================== MISC ===================== */
   .role-card{
     display:flex; align-items:center; gap:14px; padding:16px; border:1px solid var(--border);
@@ -249,6 +297,39 @@
 
 <div class="app-shell">
   <div class="phone">
+    <!-- ================= SIDEBAR NAV (จอใหญ่เท่านั้น) =================
+         ปุ่ม/การใช้งานเหมือน #bottom-nav เป๊ะ (เรียก navigateTo() เดียวกัน) -->
+    <nav id="sidebar-nav" style="display:none;">
+      <p class="side-logo">Smart Meeting<span>ระบบจัดการประชุมอัจฉริยะ</span></p>
+      <button data-target="home-view" onclick="navigateTo('home-view')">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1V10M9 9h6v11H9V9z"/></svg>
+        หน้าแรก
+      </button>
+      <button data-target="meetings-view" onclick="navigateTo('meetings-view')">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        ประชุม
+      </button>
+      <button data-target="history-view" onclick="navigateTo('history-view')">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        ประวัติการประชุม
+      </button>
+      <button data-target="create-view" onclick="openCreateMeeting()" class="admin-hide-create">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        สร้างใหม่
+      </button>
+      <button data-target="users-view" onclick="navigateTo('users-view')" class="nav-users-link hidden-admin-only">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m5-3.13a4 4 0 100-8 4 4 0 000 8zm6 3c1.657 0 3 1.79 3 4v2h-3m-9-6c-1.657 0-3 1.79-3 4v2h9v-2c0-2.21-1.343-4-3-4z"/></svg>
+        ผู้ใช้
+      </button>
+      <button data-target="admin-view" onclick="navigateTo('admin-view')" class="nav-admin-link hidden-admin-only">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        อนุมัติ
+      </button>
+      <button class="side-logout" onclick="logout()">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        ออกจากระบบ
+      </button>
+    </nav>
     <div class="screen" id="screen">
 
       <!-- ================= TOAST (ข้อความแจ้งเตือนสั้นๆ) ================= -->
@@ -281,7 +362,11 @@
 
             <button class="btn btn-accent" onclick="submitLogin()" style="margin-top:4px;">เข้าสู่ระบบ</button>
 
-            <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:16px;">
+            <p style="text-align:center;font-size:13px;margin-top:14px;">
+              <span style="color:var(--text-muted);cursor:pointer;" onclick="navigateTo('forgot-view')">ลืมรหัสผ่าน?</span>
+            </p>
+
+            <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:4px;">
               ยังไม่มีบัญชี?
               <span style="color:var(--accent-dark);font-weight:600;cursor:pointer;" onclick="navigateTo('register-view')">สมัครสมาชิก</span>
             </p>
@@ -327,6 +412,32 @@
               มีบัญชีอยู่แล้ว?
               <span style="color:var(--accent-dark);font-weight:600;cursor:pointer;" onclick="navigateTo('login-view')">เข้าสู่ระบบ</span>
             </p>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 0.7: ลืมรหัสผ่าน
+             ไม่มีระบบอีเมล — กดส่งคำขอแล้วแอดมินเป็นคนรับเรื่อง/ตั้งรหัสผ่านใหม่ให้
+             (ดูสถานะคำขอได้ในหน้า "จัดการผู้ใช้" ของแอดมิน — users-view)
+        ============================================================= -->
+        <div class="view" id="forgot-view">
+          <div class="app-header">
+            <button class="back-btn" onclick="navigateTo('login-view')">&larr; ย้อนกลับ</button>
+            <h1>ลืมรหัสผ่าน</h1>
+          </div>
+          <div class="pad">
+            <div id="fg-form">
+              <p class="sub" style="margin:-2px 0 16px;">กรอกชื่อผู้ใช้ (username) ของคุณ ระบบจะส่งคำขอไปยังแอดมินให้ตั้งรหัสผ่านใหม่ให้</p>
+              <label>ชื่อผู้ใช้ (username)</label>
+              <input type="text" id="fg-username" placeholder="เช่น employee1" autocomplete="username">
+              <button class="btn btn-accent" id="fg-submit-btn" onclick="submitForgotPassword()">ส่งคำขอรีเซ็ตรหัสผ่าน</button>
+            </div>
+            <div id="fg-success" style="display:none;text-align:center;padding:30px 10px;">
+              <div style="font-size:44px;margin-bottom:10px;">📨</div>
+              <p style="font-weight:600;font-size:15.5px;margin:0 0 6px;">ส่งคำขอเรียบร้อยแล้ว</p>
+              <p class="sub" id="fg-success-sub">กำลังรอแอดมินดำเนินการ</p>
+              <button class="btn btn-outline" style="margin-top:20px;" onclick="navigateTo('login-view')">กลับไปหน้าเข้าสู่ระบบ</button>
+            </div>
           </div>
         </div>
 
@@ -509,6 +620,9 @@
               <button class="btn btn-accent" onclick="submitCreateUser()">เพิ่มผู้ใช้</button>
             </div>
 
+            <p class="section-title">คำขอรีเซ็ตรหัสผ่านที่รอดำเนินการ</p>
+            <div class="list" id="password-requests-list" style="margin-bottom:18px;"></div>
+
             <p class="section-title">รายชื่อผู้ใช้ทั้งหมด</p>
             <div class="list" id="users-list"></div>
           </div>
@@ -552,6 +666,43 @@
           </div>
         </div>
 
+        <!-- ============================================================
+             VIEW 7: ประวัติการประชุม (ทุกการประชุม รวมที่จบไปแล้ว) —
+             ดูได้ทุก role, คลิกเข้าไปดูรายละเอียด/สถานะรายงานการประชุม
+        ============================================================= -->
+        <div class="view" id="history-view">
+          <div class="app-header">
+            <h1>ประวัติการประชุม</h1>
+          </div>
+          <div class="pad">
+            <p class="sub" style="margin:-4px 0 14px;">รวมการประชุมทั้งหมดในระบบ (รวมที่จบไปแล้ว) — คลิกเพื่อดูรายละเอียดและสถานะรายงานการประชุม</p>
+            <div class="list" id="history-list"></div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             VIEW 8: รายงานสรุปผลการประชุม (กรอก/แก้ไข + Export)
+        ============================================================= -->
+        <div class="view" id="report-view">
+          <div class="app-header">
+            <button class="back-btn" onclick="backFromReportForm()">&larr; ย้อนกลับ</button>
+            <h1>รายงานการประชุม</h1>
+          </div>
+          <div class="pad">
+            <label>สรุปผลการประชุม</label>
+            <textarea id="rp-summary" rows="4" placeholder="สรุปประเด็นสำคัญที่พูดคุยในที่ประชุม"></textarea>
+
+            <label>มติ / การตัดสินใจ</label>
+            <textarea id="rp-resolutions" rows="3" placeholder="ข้อสรุปหรือมติที่ที่ประชุมตกลงกัน"></textarea>
+
+            <label>สิ่งที่ต้องทำต่อ (Action Items)</label>
+            <textarea id="rp-actions" rows="3" placeholder="งานที่ต้องทำต่อ พร้อมผู้รับผิดชอบ (ถ้ามี)"></textarea>
+
+            <button class="btn btn-accent" onclick="submitReport()">บันทึกรายงาน</button>
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="exportCurrentReport()">📄 Export (พิมพ์ / บันทึกเป็น PDF)</button>
+          </div>
+        </div>
+
       </div><!-- /content -->
 
       <!-- ================= BOTTOM NAV ================= -->
@@ -568,11 +719,15 @@
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           สร้างใหม่
         </button>
-        <button data-target="users-view" onclick="navigateTo('users-view')" id="nav-users" class="hidden-admin-only">
+        <button data-target="history-view" onclick="navigateTo('history-view')">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          ประวัติ
+        </button>
+        <button data-target="users-view" onclick="navigateTo('users-view')" class="nav-users-link hidden-admin-only">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m5-3.13a4 4 0 100-8 4 4 0 000 8zm6 3c1.657 0 3 1.79 3 4v2h-3m-9-6c-1.657 0-3 1.79-3 4v2h9v-2c0-2.21-1.343-4-3-4z"/></svg>
           ผู้ใช้
         </button>
-        <button data-target="admin-view" onclick="navigateTo('admin-view')" id="nav-admin" class="hidden-admin-only">
+        <button data-target="admin-view" onclick="navigateTo('admin-view')" class="nav-admin-link hidden-admin-only">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           อนุมัติ
         </button>
@@ -621,13 +776,19 @@ let rooms = [];
 let meetings = [];
 let notifications = [];
 let allUsers = [];
+let passwordRequests = [];
 
 let editingMeetingId = null;  // null = โหมดสร้างใหม่, ไม่ null = กำลังแก้ไขการประชุมนี้อยู่
+let reportMeetingId = null;   // การประชุมที่กำลังกรอก/ดูรายงานอยู่ในหน้า report-view
 
 async function loadRooms(){ rooms = await api('GET', '/api/rooms'); }
 async function loadMeetings(){ meetings = await api('GET', '/api/meetings'); }
 async function loadNotifications(){ notifications = await api('GET', '/api/notifications'); updateBellDot(); }
 async function loadUsers(){ allUsers = await api('GET', '/api/users'); }
+async function loadPasswordRequests(){
+  if (currentRole !== 'admin') { passwordRequests = []; return; }
+  try { passwordRequests = await api('GET', '/api/password-reset/pending'); } catch (e) { passwordRequests = []; }
+}
 async function refreshAll(){ await Promise.all([loadRooms(), loadMeetings(), loadNotifications()]); }
 
 /* ==========================================================================
@@ -673,11 +834,12 @@ async function navigateTo(viewId){
   document.getElementById(viewId).classList.add('active');
   document.getElementById('content').scrollTop = 0;
 
-  document.querySelectorAll('#bottom-nav button[data-target]').forEach(b=>{
+  document.querySelectorAll('#bottom-nav button[data-target], #sidebar-nav button[data-target]').forEach(b=>{
     b.classList.toggle('active', b.dataset.target === viewId);
   });
 
-  if (viewId !== 'login-view' && viewId !== 'register-view'){
+  const noAuthViews = ['login-view', 'register-view', 'forgot-view'];
+  if (!noAuthViews.includes(viewId)){
     try {
       await refreshAll();
     } catch (e) {
@@ -690,7 +852,9 @@ async function navigateTo(viewId){
   if (viewId === 'meetings-view') renderMeetingsList();
   if (viewId === 'create-view') resetCreateForm();
   if (viewId === 'admin-view') renderAdminList();
-  if (viewId === 'users-view') { await loadUsers(); renderUsersList(); }
+  if (viewId === 'history-view') renderHistoryList();
+  if (viewId === 'users-view') { await loadUsers(); await loadPasswordRequests(); renderUsersList(); renderPasswordRequests(); }
+  if (viewId === 'report-view') await loadReportIntoForm();
 }
 
 /* ==========================================================================
@@ -736,6 +900,30 @@ async function submitRegister(){
   applyLoginResult(result);
 }
 
+/* ==========================================================================
+   ลืมรหัสผ่าน — ไม่ต้อง login (เพราะเข้าระบบเองไม่ได้อยู่แล้ว) กดส่งคำขอแล้ว
+   รอแอดมินตั้งรหัสผ่านใหม่ให้ (ดูสถานะ/ดำเนินการได้ในหน้า "จัดการผู้ใช้" ของแอดมิน)
+========================================================================== */
+async function submitForgotPassword(){
+  const username = document.getElementById('fg-username').value.trim();
+  if (!username) { showToast('กรุณากรอกชื่อผู้ใช้'); return; }
+
+  const btn = document.getElementById('fg-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'กำลังส่งคำขอ...';
+
+  try {
+    const result = await api('POST', '/api/password-reset/request', { username });
+    document.getElementById('fg-form').style.display = 'none';
+    document.getElementById('fg-success').style.display = 'block';
+    document.getElementById('fg-success-sub').textContent = result.message || 'กำลังรอแอดมินดำเนินการ';
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'ส่งคำขอรีเซ็ตรหัสผ่าน';
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
 function applyLoginResult(result){
   authToken = result.token;
   currentUser = result.user;
@@ -746,11 +934,13 @@ function applyLoginResult(result){
   document.getElementById('home-role-label').textContent = `${label} · ${currentUser.name}`;
 
   document.getElementById('bottom-nav').style.display = 'flex';
+  document.getElementById('sidebar-nav').style.display = 'flex';
   document.querySelectorAll('.admin-hide-create').forEach(el=>{
     el.style.display = (currentRole === 'admin') ? 'none' : 'flex';
   });
-  document.getElementById('nav-admin').classList.toggle('hidden-admin-only', currentRole !== 'admin');
-  document.getElementById('nav-users').classList.toggle('hidden-admin-only', currentRole !== 'admin');
+  document.querySelectorAll('.nav-admin-link, .nav-users-link').forEach(el=>{
+    el.classList.toggle('hidden-admin-only', currentRole !== 'admin');
+  });
 
   navigateTo('home-view');
 }
@@ -762,6 +952,7 @@ function logout(){
   currentUser = null;
   try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (e) { /* เช่นเดียวกัน */ }
   document.getElementById('bottom-nav').style.display = 'none';
+  document.getElementById('sidebar-nav').style.display = 'none';
   navigateTo('login-view');
 }
 
@@ -845,7 +1036,8 @@ if (publicCheckinMeetingId) {
 ========================================================================== */
 function renderDashboard(){
   const todayStr = new Date().toISOString().slice(0, 10);
-  const today = meetings.filter(m => m.date === todayStr);
+  // ไม่นับการประชุมที่ "เสร็จสิ้นแล้ว" ในรายการ "กำลังจะมาถึง" (ดูย้อนหลังได้ที่แท็บ "ประวัติ" แทน)
+  const today = meetings.filter(m => m.date === todayStr && m.status !== 'completed');
   const freeRooms = rooms.filter(r => r.status === 'free').length;
   const checkedInCount = meetings.reduce((s,m)=> s + (m.checkInCount || 0), 0);
   const pendingCount = meetings.filter(m => m.status === 'pending').length;
@@ -879,8 +1071,33 @@ function statusBadge(m){
   if (m.status === 'pending') return '<span class="badge badge-gold">รออนุมัติ</span>';
   if (m.status === 'rejected') return '<span class="badge badge-danger">ถูกปฏิเสธ</span>';
   if (m.status === 'cancelled') return '<span class="badge badge-danger">ยกเลิกแล้ว</span>';
+  if (m.status === 'completed') return '<span class="badge" style="background:var(--border);color:var(--text-muted);">เสร็จสิ้นแล้ว</span>';
   if (m.confidential === 'ลับเฉพาะผู้เข้าร่วม') return '<span class="badge badge-info">ลับเฉพาะผู้เข้าร่วม</span>';
   return '<span class="badge badge-accent">ยืนยันแล้ว</span>';
+}
+
+/* ==========================================================================
+   ประวัติการประชุม (ทุกการประชุม รวมที่จบไปแล้ว) — ดูได้ทุก role
+========================================================================== */
+function renderHistoryList(){
+  const el = document.getElementById('history-list');
+  const sorted = [...meetings].sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time)); // ล่าสุดก่อน
+  el.innerHTML = sorted.map(m => `
+    <div class="list-item" onclick="openMeetingDetail(${m.id})">
+      <div style="flex:1;">
+        <p class="ttl">${m.title}</p>
+        <p class="sub">${m.date} • ${m.time} • ประธาน: ${m.chairName || '-'}</p>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+        ${statusBadge(m)}
+        ${m.status === 'completed'
+          ? (m.reportFiled
+              ? '<span class="badge badge-accent" style="font-size:10.5px;">📝 มีรายงานแล้ว</span>'
+              : '<span class="badge badge-gold" style="font-size:10.5px;">ยังไม่มีรายงาน</span>')
+          : ''}
+      </div>
+    </div>
+  `).join('') || `<div class="empty">ยังไม่มีการประชุมในระบบ</div>`;
 }
 
 /* ==========================================================================
@@ -888,7 +1105,10 @@ function statusBadge(m){
 ========================================================================== */
 function renderMeetingsList(){
   const el = document.getElementById('meetings-list');
-  el.innerHTML = meetings.map(m => `
+  // ไม่โชว์การประชุมที่ "เสร็จสิ้นแล้ว" ในรายการหลัก (ถูก archive อัตโนมัติเมื่อหมดเวลา)
+  // ยังดูย้อนหลังได้เสมอในแท็บ "ประวัติการประชุม" (history-view)
+  const activeMeetings = meetings.filter(m => m.status !== 'completed');
+  el.innerHTML = activeMeetings.map(m => `
     <div class="list-item" onclick="openMeetingDetail(${m.id})">
       <div style="flex:1;">
         <p class="ttl">${m.title}</p>
@@ -927,15 +1147,30 @@ async function openMeetingDetail(id){
       </div>
     ` : ''}
 
-    <p class="section-title" style="margin-top:18px;">QR Code เช็คอิน</p>
-    <div class="card" style="margin-bottom:14px;text-align:center;">
-      <p class="sub" style="margin:0 0 10px;">ให้ผู้เข้าร่วมสแกน QR นี้เพื่อเช็คอินเข้าร่วมประชุม (ไม่ต้อง login)</p>
-      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 16px;" onclick="toggleDetailQr(${m.id})">แสดง / ซ่อน QR เช็คอิน</button>
-      <div id="detail-qr-box" style="display:none;margin-top:14px;">
-        <div id="detail-qr-canvas-wrap" style="display:flex;justify-content:center;"></div>
-        <p class="sub" style="margin:10px 0 0;word-break:break-all;">${location.origin}/checkin/${m.id}</p>
+    ${(m.status === 'confirmed' || m.status === 'pending') ? `
+      <p class="section-title" style="margin-top:18px;">QR Code เช็คอิน</p>
+      <div class="card" style="margin-bottom:14px;text-align:center;">
+        <p class="sub" style="margin:0 0 10px;">ให้ผู้เข้าร่วมสแกน QR นี้เพื่อเช็คอินเข้าร่วมประชุม (ไม่ต้อง login)</p>
+        <button class="btn btn-outline btn-sm" style="width:auto;padding:0 16px;" onclick="toggleDetailQr(${m.id})">แสดง / ซ่อน QR เช็คอิน</button>
+        <div id="detail-qr-box" style="display:none;margin-top:14px;">
+          <div id="detail-qr-canvas-wrap" style="display:flex;justify-content:center;"></div>
+          <p class="sub" style="margin:10px 0 0;word-break:break-all;">${location.origin}/checkin/${m.id}</p>
+        </div>
       </div>
-    </div>
+    ` : ''}
+
+    ${(m.status === 'completed' || m.reportFiled) ? `
+      <p class="section-title" style="margin-top:18px;">รายงานการประชุม</p>
+      <div class="card" style="margin-bottom:14px;">
+        ${m.reportFiled
+          ? `<p class="sub" style="margin:0 0 10px;">มีการบันทึกรายงานการประชุมนี้แล้ว</p>
+             <button class="btn btn-outline btn-sm" onclick="openReportForm(${m.id})">📝 ดู / แก้ไขรายงาน</button>`
+          : (canManage
+              ? `<p class="sub" style="margin:0 0 10px;">ยังไม่ได้บันทึกรายงานการประชุมนี้</p>
+                 <button class="btn btn-accent btn-sm" onclick="openReportForm(${m.id})">📝 บันทึกรายงานการประชุม</button>`
+              : `<p class="sub" style="margin:0;">ยังไม่มีรายงานการประชุมนี้</p>`)}
+      </div>
+    ` : ''}
 
     <p class="section-title">ผู้เข้าร่วมที่เช็คอินแล้ว (${m.attendees.length})</p>
     <div class="list" style="margin-bottom:14px;">
@@ -989,6 +1224,82 @@ async function cancelMeeting(id){
 function editMeeting(id){
   editingMeetingId = id;
   navigateTo('create-view');
+}
+
+/* ==========================================================================
+   รายงานสรุปผลการประชุม — กรอก/แก้ไข + Export เป็น PDF ผ่านหน้าพิมพ์ของเบราว์เซอร์
+========================================================================== */
+function openReportForm(meetingId){
+  reportMeetingId = meetingId;
+  navigateTo('report-view');
+}
+
+function backFromReportForm(){
+  if (reportMeetingId) { openMeetingDetail(reportMeetingId); }
+  else { navigateTo('meetings-view'); }
+}
+
+async function loadReportIntoForm(){
+  let report = null;
+  try { report = await api('GET', `/api/reports/${reportMeetingId}`); } catch (e) { report = null; }
+  document.getElementById('rp-summary').value = (report && report.summary) || '';
+  document.getElementById('rp-resolutions').value = (report && report.resolutions) || '';
+  document.getElementById('rp-actions').value = (report && report.action_items) || '';
+}
+
+async function submitReport(){
+  const body = {
+    summary: document.getElementById('rp-summary').value.trim(),
+    resolutions: document.getElementById('rp-resolutions').value.trim(),
+    actionItems: document.getElementById('rp-actions').value.trim(),
+  };
+  try {
+    await api('POST', `/api/reports/${reportMeetingId}`, body);
+    showToast('บันทึกรายงานการประชุมแล้ว');
+    await loadMeetings(); // อัปเดตสถานะ "มีรายงานแล้ว" ในแคชก่อนกลับไปหน้ารายละเอียด
+    openMeetingDetail(reportMeetingId);
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+function exportCurrentReport(){
+  const m = meetings.find(x => x.id === reportMeetingId);
+  if (!m) { showToast('ไม่พบข้อมูลการประชุม'); return; }
+  const report = {
+    summary: document.getElementById('rp-summary').value,
+    resolutions: document.getElementById('rp-resolutions').value,
+    actionItems: document.getElementById('rp-actions').value,
+  };
+  exportReportPrintView(m, report);
+}
+
+// เปิดหน้าต่างใหม่ที่จัดหน้าสำหรับพิมพ์/บันทึกเป็น PDF โดยเฉพาะ (ใช้ window.print()
+// ของเบราว์เซอร์เอง — ไม่ต้องติดตั้งไลบรารีสร้าง PDF ฝั่งเซิร์ฟเวอร์เพิ่ม)
+function exportReportPrintView(meeting, report){
+  const w = window.open('', '_blank');
+  if (!w) { showToast('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตแล้วลองใหม่'); return; }
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+    <title>รายงานการประชุม - ${esc(meeting.title)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      body{font-family:'Noto Sans Thai',sans-serif;padding:40px;color:#232323;line-height:1.8;max-width:760px;margin:0 auto;}
+      h1{font-size:20px;margin:0 0 4px;}
+      .meta{color:#6B6A63;font-size:13px;margin-bottom:28px;}
+      h2{font-size:15px;margin:22px 0 6px;border-bottom:1px solid #E4E1D6;padding-bottom:5px;}
+      p{white-space:pre-wrap;font-size:14px;margin:0;}
+      @media print{ body{padding:0;} }
+    </style></head><body>
+      <h1>รายงานสรุปผลการประชุม: ${esc(meeting.title)}</h1>
+      <p class="meta">วันที่ ${esc(meeting.date)} เวลา ${esc(meeting.time)} น. • ประธาน: ${esc(meeting.chairName || '-')}</p>
+      <h2>สรุปผลการประชุม</h2><p>${esc(report.summary) || '-'}</p>
+      <h2>มติ / การตัดสินใจ</h2><p>${esc(report.resolutions) || '-'}</p>
+      <h2>สิ่งที่ต้องทำต่อ</h2><p>${esc(report.actionItems) || '-'}</p>
+    </body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 350);
 }
 
 /* ==========================================================================
@@ -1175,6 +1486,36 @@ function renderUsersList(){
 }
 
 function escapeJs(str){ return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+/* ==========================================================================
+   คำขอรีเซ็ตรหัสผ่านที่รอดำเนินการ (ส่วนหนึ่งของหน้า "จัดการผู้ใช้" — เฉพาะแอดมิน)
+========================================================================== */
+function renderPasswordRequests(){
+  const el = document.getElementById('password-requests-list');
+  el.innerHTML = passwordRequests.map(r => `
+    <div class="list-item" style="cursor:default;">
+      <div style="flex:1;">
+        <p class="ttl">${r.name}</p>
+        <p class="sub">@${r.username} • ขอเมื่อ ${r.requested_at}</p>
+      </div>
+      <button class="btn btn-accent btn-sm" style="width:auto;padding:0 14px;" onclick="resolvePasswordRequest(${r.request_id}, '${escapeJs(r.name)}')">ตั้งรหัสผ่านใหม่</button>
+    </div>
+  `).join('') || `<div class="empty">ไม่มีคำขอที่รอดำเนินการ</div>`;
+}
+
+async function resolvePasswordRequest(requestId, name){
+  const newPassword = prompt(`ตั้งรหัสผ่านใหม่ให้ "${name}" (อย่างน้อย 4 ตัวอักษร):`);
+  if (!newPassword) return;
+  if (newPassword.length < 4) return showToast('รหัสผ่านควรมีอย่างน้อย 4 ตัวอักษร');
+  try {
+    await api('POST', `/api/password-reset/${requestId}/resolve`, { newPassword });
+    showToast('ตั้งรหัสผ่านใหม่สำเร็จ — แจ้งรหัสผ่านใหม่ให้เจ้าของบัญชีได้เลย');
+    await loadPasswordRequests();
+    renderPasswordRequests();
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
 
 async function submitCreateUser(){
   const name = document.getElementById('nu-name').value.trim();

@@ -5,6 +5,7 @@ const express = require('express');
 const db = require('../db');
 const { getCurrentUser } = require('../util/session');
 const { asyncHandler } = require('../util/async-handler');
+const { sendDueReminders, archiveEndedMeetings } = require('../util/meeting-lifecycle');
 
 const router = express.Router();
 
@@ -12,12 +13,14 @@ const router = express.Router();
 // helper: รวมสถานะของ "การประชุม" (meetings.status) กับสถานะของ "การจองห้อง"
 // (bookings.status) ให้เป็นสถานะเดียวที่หน้าเว็บใช้แสดงผล เช่น badge
 //   - ถ้าการประชุมถูกยกเลิก             -> cancelled
+//   - ถ้าหมดเวลาไปแล้ว (เซิร์ฟเวอร์ archive อัตโนมัติ) -> completed
 //   - ถ้ามีการจองห้องและรออนุมัติ         -> pending
 //   - ถ้ามีการจองห้องและถูกปฏิเสธ        -> rejected
 //   - ถ้าเป็น Online (ไม่มีการจองห้อง) หรือจองห้องผ่านแล้ว -> confirmed
 // ----------------------------------------------------------------------------
 function overallStatus(row) {
   if (row.meeting_status === 'cancelled') return 'cancelled';
+  if (row.meeting_status === 'completed') return 'completed';
   if (row.booking_status === 'pending') return 'pending';
   if (row.booking_status === 'rejected') return 'rejected';
   return 'confirmed';
@@ -30,11 +33,13 @@ const LIST_SQL = `
     m.organizer_id, m.chair_name,
     b.booking_id, b.room_id, b.status AS booking_status,
     r.room_name,
-    u.name AS organizer_name
+    u.name AS organizer_name,
+    rpt.report_id AS report_id
   FROM meetings m
   LEFT JOIN bookings b ON b.meeting_id = m.meeting_id
   LEFT JOIN rooms r ON r.room_id = b.room_id
   LEFT JOIN users u ON u.user_id = m.organizer_id
+  LEFT JOIN meeting_reports rpt ON rpt.meeting_id = m.meeting_id
   ORDER BY m.meeting_date, m.start_time
 `;
 
@@ -54,6 +59,7 @@ function shapeRow(row, participants) {
     chairName: row.chair_name || '',
     status: overallStatus(row),
     bookingId: row.booking_id || null,
+    reportFiled: !!row.report_id,
     // attendees: คนที่เช็คอินเข้าร่วมจริง (ผ่าน QR เท่านั้น ไม่มีรายชื่อล่วงหน้าอีกต่อไป)
     attendees: participants
       .filter((p) => p.check_in_status === 'checked_in')
@@ -76,7 +82,12 @@ async function getOneRow(meetingId) {
 }
 
 // GET /api/meetings — รายการการประชุมทั้งหมด
+// ก่อนดึงรายการทุกครั้ง จะไล่เช็คก่อนว่ามีการประชุมไหน "ถึงเวลาแจ้งเตือน" หรือ
+// "จบไปแล้ว" บ้าง (lazy check แทน cron job จริง — ดู util/meeting-lifecycle.js)
 router.get('/', asyncHandler(async (req, res) => {
+  await archiveEndedMeetings();
+  await sendDueReminders();
+
   const listResult = await db.execute(LIST_SQL);
   const meetings = await Promise.all(
     listResult.rows.map(async (row) => shapeRow(row, await getParticipants(row.meeting_id)))
