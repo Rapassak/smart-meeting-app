@@ -6,8 +6,31 @@ const db = require('../db');
 const { getCurrentUser } = require('../util/session');
 const { asyncHandler } = require('../util/async-handler');
 const { sendDueReminders, archiveEndedMeetings } = require('../util/meeting-lifecycle');
+const { meetingRange, rangesOverlap } = require('../util/time-range');
 
 const router = express.Router();
+
+// เช็คว่าห้องที่จะจองชนกับการจองอื่นที่ "ช่วงเวลาทับซ้อนกัน" หรือเปล่า (ห้องเดียวกัน
+// จองคนละช่วงเวลาได้ตามปกติ ไม่ใช่ว่าห้องถูกจองไปแล้วจะไม่ว่างตลอดไป) — excludeMeetingId
+// ใช้ตอนแก้ไขการประชุมเดิม จะได้ไม่ชนกับการจองของตัวเอง
+async function findRoomConflict(roomId, date, startTime, endTime, excludeMeetingId) {
+  const bookingsResult = await db.execute({
+    sql: `
+      SELECT m.meeting_id, m.title, m.meeting_date, m.start_time, m.end_time
+      FROM bookings b
+      JOIN meetings m ON m.meeting_id = b.meeting_id
+      WHERE b.room_id = ? AND b.status IN ('pending', 'confirmed') AND m.status = 'scheduled'
+    `,
+    args: [roomId],
+  });
+  const wanted = meetingRange(date, startTime, endTime);
+  for (const row of bookingsResult.rows) {
+    if (excludeMeetingId && String(row.meeting_id) === String(excludeMeetingId)) continue;
+    const existing = meetingRange(row.meeting_date, row.start_time, row.end_time);
+    if (rangesOverlap(wanted, existing)) return row;
+  }
+  return null;
+}
 
 // ----------------------------------------------------------------------------
 // ระดับชั้นความลับ 3 ระดับคงที่ + สิทธิ์การเข้าถึงของผู้ใช้ (access_level 1-3
@@ -146,6 +169,15 @@ router.post('/', asyncHandler(async (req, res) => {
 
   const needsRoom = type !== 'Online';
 
+  if (needsRoom && room) {
+    const conflict = await findRoomConflict(room, date, time, endTime, null);
+    if (conflict) {
+      return res.status(409).json({
+        error: `ห้องนี้ถูกจองในช่วงเวลาที่ทับซ้อนกันแล้ว (การประชุม "${conflict.title}" วันที่ ${conflict.meeting_date} เวลา ${conflict.start_time}${conflict.end_time ? '-' + conflict.end_time : ''} น.) กรุณาเลือกห้องหรือเวลาอื่น`,
+      });
+    }
+  }
+
   const insertResult = await db.execute({
     sql: `INSERT INTO meetings (title, meeting_date, start_time, end_time, meeting_type, confidential_level, meeting_link, organizer_id, chair_name, status)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')`,
@@ -188,6 +220,16 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (!CONFIDENTIAL_LEVELS.includes(confidentialLevel)) confidentialLevel = 'ทั่วไป';
   if (!canSeeConfidential(user, confidentialLevel)) {
     return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ตั้งระดับความลับนี้ (สูงกว่าระดับการเข้าถึงของคุณ)' });
+  }
+
+  // เช็คก่อนแก้ไขอะไรลง DB จริง — ถ้าชนกัน จะได้ไม่มีการอัปเดตค้างคาแบบครึ่งๆ กลางๆ
+  if (needsRoom && room) {
+    const conflict = await findRoomConflict(room, date, time, endTime, meetingId);
+    if (conflict) {
+      return res.status(409).json({
+        error: `ห้องนี้ถูกจองในช่วงเวลาที่ทับซ้อนกันแล้ว (การประชุม "${conflict.title}" วันที่ ${conflict.meeting_date} เวลา ${conflict.start_time}${conflict.end_time ? '-' + conflict.end_time : ''} น.) กรุณาเลือกห้องหรือเวลาอื่น`,
+      });
+    }
   }
 
   await db.execute({

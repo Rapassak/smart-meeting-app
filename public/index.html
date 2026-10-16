@@ -9,8 +9,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<!-- ไลบรารีสร้าง QR Code จริงฝั่ง browser (ไม่ต้องติดตั้ง npm package ฝั่ง backend) -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- ไลบรารีสร้าง QR Code จริงฝั่ง browser — โฮสต์เองในเว็บนี้เลย (vendor/qrcode-local.js)
+     ไม่ได้โหลดจาก CDN ภายนอกแล้ว กันปัญหาเน็ตที่ใช้งาน (เช่น เน็ตองค์กร) บล็อกการโหลด
+     สคริปต์จากเน็ตนอก ทำให้ QR สร้างไม่ขึ้น (ดูรายละเอียดในไฟล์นั้น) -->
+<script src="/vendor/qrcode-local.js"></script>
 
 <style>
   /* ===================== DESIGN TOKENS ===================== */
@@ -332,15 +334,15 @@
          ปุ่ม/การใช้งานเหมือน #bottom-nav เป๊ะ (เรียก navigateTo() เดียวกัน) -->
     <nav id="sidebar-nav" style="display:none;">
       <p class="side-logo">Smart Meeting<span>ระบบจัดการประชุมอัจฉริยะ</span></p>
-      <button data-target="home-view" onclick="navigateTo('home-view')">
+      <button data-target="home-view" onclick="navigateTo('home-view', {resetHistory:true})">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1V10M9 9h6v11H9V9z"/></svg>
         หน้าแรก
       </button>
-      <button data-target="meetings-view" onclick="navigateTo('meetings-view')">
+      <button data-target="meetings-view" onclick="navigateTo('meetings-view', {resetHistory:true})">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         การประชุม
       </button>
-      <button data-target="history-view" onclick="navigateTo('history-view')">
+      <button data-target="history-view" onclick="navigateTo('history-view', {resetHistory:true})">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         ประวัติการประชุม
       </button>
@@ -348,11 +350,11 @@
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
         สร้างใหม่
       </button>
-      <button data-target="users-view" onclick="navigateTo('users-view')" class="nav-users-link hidden-admin-only">
+      <button data-target="users-view" onclick="navigateTo('users-view', {resetHistory:true})" class="nav-users-link hidden-admin-only">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m5-3.13a4 4 0 100-8 4 4 0 000 8zm6 3c1.657 0 3 1.79 3 4v2h-3m-9-6c-1.657 0-3 1.79-3 4v2h9v-2c0-2.21-1.343-4-3-4z"/></svg>
         ผู้ใช้
       </button>
-      <button data-target="admin-view" onclick="navigateTo('admin-view')" class="nav-admin-link hidden-admin-only">
+      <button data-target="admin-view" onclick="navigateTo('admin-view', {resetHistory:true})" class="nav-admin-link hidden-admin-only">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         อนุมัติ
       </button>
@@ -537,7 +539,13 @@
         ============================================================= -->
         <div class="view" id="meetings-view">
           <div class="app-header">
-            <h1>รายการการประชุม</h1>
+            <div class="header-top-row">
+              <h1>รายการการประชุม</h1>
+              <button class="bell-btn" onclick="toggleNotifPanel()" aria-label="การแจ้งเตือน">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span class="bell-dot"></span>
+              </button>
+            </div>
           </div>
           <div class="pad">
             <div class="list" id="meetings-list"></div>
@@ -550,8 +558,14 @@
         ============================================================= -->
         <div class="view" id="meeting-detail-view">
           <div class="app-header">
-            <button class="back-btn" onclick="navigateTo('meetings-view')">&larr; ย้อนกลับ</button>
-            <h1 id="detail-title">รายละเอียดการประชุม</h1>
+            <button class="back-btn" onclick="goBack('meetings-view')">&larr; ย้อนกลับ</button>
+            <div class="header-top-row">
+              <h1 id="detail-title">รายละเอียดการประชุม</h1>
+              <button class="bell-btn" onclick="toggleNotifPanel()" aria-label="การแจ้งเตือน">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span class="bell-dot"></span>
+              </button>
+            </div>
           </div>
           <div class="pad" id="detail-body"></div>
         </div>
@@ -563,7 +577,7 @@
         ============================================================= -->
         <div class="view" id="create-view">
           <div class="app-header">
-            <button class="back-btn" onclick="navigateTo('home-view')">&larr; ย้อนกลับ</button>
+            <button class="back-btn" onclick="goBack('home-view')">&larr; ย้อนกลับ</button>
             <h1>สร้างการประชุมใหม่</h1>
           </div>
           <div class="pad">
@@ -571,11 +585,11 @@
             <input type="text" id="f-title" placeholder="เช่น ประชุมทีม Marketing">
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-              <div><label>วันที่</label><input type="date" id="f-date"></div>
-              <div><label>เวลาเริ่ม</label><input type="time" id="f-time"></div>
+              <div><label>วันที่</label><input type="date" id="f-date" onchange="loadRoomsForForm()"></div>
+              <div><label>เวลาเริ่ม</label><input type="time" id="f-time" onchange="loadRoomsForForm()"></div>
             </div>
             <label>เวลาจบ</label>
-            <input type="time" id="f-end-time">
+            <input type="time" id="f-end-time" onchange="loadRoomsForForm()">
 
             <label>รูปแบบการประชุม</label>
             <div class="seg" id="type-seg">
@@ -647,8 +661,16 @@
         ============================================================= -->
         <div class="view" id="users-view">
           <div class="app-header">
-            <p class="eyebrow">แอดมิน</p>
-            <h1>จัดการผู้ใช้</h1>
+            <div class="header-top-row">
+              <div>
+                <p class="eyebrow">แอดมิน</p>
+                <h1>จัดการผู้ใช้</h1>
+              </div>
+              <button class="bell-btn" onclick="toggleNotifPanel()" aria-label="การแจ้งเตือน">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span class="bell-dot"></span>
+              </button>
+            </div>
           </div>
           <div class="pad">
             <p class="section-title">เพิ่มผู้ใช้ใหม่</p>
@@ -696,8 +718,16 @@
         ============================================================= -->
         <div class="view" id="admin-view">
           <div class="app-header">
-            <p class="eyebrow">แอดมิน</p>
-            <h1>Dashboard สรุปผล</h1>
+            <div class="header-top-row">
+              <div>
+                <p class="eyebrow">แอดมิน</p>
+                <h1>Dashboard สรุปผล</h1>
+              </div>
+              <button class="bell-btn" onclick="toggleNotifPanel()" aria-label="การแจ้งเตือน">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span class="bell-dot"></span>
+              </button>
+            </div>
           </div>
           <div class="pad">
             <div class="stat-grid">
@@ -735,7 +765,13 @@
         ============================================================= -->
         <div class="view" id="history-view">
           <div class="app-header">
-            <h1>ประวัติการประชุม</h1>
+            <div class="header-top-row">
+              <h1>ประวัติการประชุม</h1>
+              <button class="bell-btn" onclick="toggleNotifPanel()" aria-label="การแจ้งเตือน">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span class="bell-dot"></span>
+              </button>
+            </div>
           </div>
           <div class="pad">
             <p class="sub" style="margin:-4px 0 14px;">รวมการประชุมทั้งหมดในระบบ (รวมที่จบไปแล้ว) — คลิกเพื่อดูรายละเอียดและสถานะรายงานการประชุม</p>
@@ -791,8 +827,14 @@
         ============================================================= -->
         <div class="view" id="report-view">
           <div class="app-header">
-            <button class="back-btn" onclick="backFromReportForm()">&larr; ย้อนกลับ</button>
-            <h1>รายงานการประชุม</h1>
+            <button class="back-btn" onclick="goBack('meetings-view')">&larr; ย้อนกลับ</button>
+            <div class="header-top-row">
+              <h1>รายงานการประชุม</h1>
+              <button class="bell-btn" onclick="toggleNotifPanel()" aria-label="การแจ้งเตือน">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span class="bell-dot"></span>
+              </button>
+            </div>
           </div>
           <div class="pad">
             <label>สรุปผลการประชุม</label>
@@ -813,11 +855,11 @@
 
       <!-- ================= BOTTOM NAV ================= -->
       <nav id="bottom-nav" style="display:none;">
-        <button data-target="home-view" onclick="navigateTo('home-view')">
+        <button data-target="home-view" onclick="navigateTo('home-view', {resetHistory:true})">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1V10M9 9h6v11H9V9z"/></svg>
           หน้าแรก
         </button>
-        <button data-target="meetings-view" onclick="navigateTo('meetings-view')">
+        <button data-target="meetings-view" onclick="navigateTo('meetings-view', {resetHistory:true})">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
           การประชุม
         </button>
@@ -825,15 +867,15 @@
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           สร้างใหม่
         </button>
-        <button data-target="history-view" onclick="navigateTo('history-view')">
+        <button data-target="history-view" onclick="navigateTo('history-view', {resetHistory:true})">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           ประวัติ
         </button>
-        <button data-target="users-view" onclick="navigateTo('users-view')" class="nav-users-link hidden-admin-only">
+        <button data-target="users-view" onclick="navigateTo('users-view', {resetHistory:true})" class="nav-users-link hidden-admin-only">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m5-3.13a4 4 0 100-8 4 4 0 000 8zm6 3c1.657 0 3 1.79 3 4v2h-3m-9-6c-1.657 0-3 1.79-3 4v2h9v-2c0-2.21-1.343-4-3-4z"/></svg>
           ผู้ใช้
         </button>
-        <button data-target="admin-view" onclick="navigateTo('admin-view')" class="nav-admin-link hidden-admin-only">
+        <button data-target="admin-view" onclick="navigateTo('admin-view', {resetHistory:true})" class="nav-admin-link hidden-admin-only">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           อนุมัติ
         </button>
@@ -878,7 +920,8 @@ let authToken = null;     // token ที่ได้จาก POST /api/auth/lo
 let currentRole = null;   // 'employee' | 'admin' — เซิร์ฟเวอร์เป็นคนกำหนดจากบัญชีที่สมัครไว้ ไม่ใช่ผู้ใช้เลือกเอง
 let currentUser = null;   // { user_id, username, name, role } จากเซิร์ฟเวอร์
 
-let rooms = [];
+let rooms = [];       // สถานะห้อง "ตอนนี้เดี๋ยวนี้" (ใช้กับหน้าแรก/Dashboard แอดมิน)
+let formRooms = [];   // สถานะห้องตามวัน/เวลาที่กำลังเลือกอยู่ในฟอร์มสร้าง/แก้ไขการประชุม
 let meetings = [];
 let notifications = [];
 let allUsers = [];
@@ -917,7 +960,58 @@ function goToPage(which, page){
   if (which === 'pwreq'){ pwReqPage = page; renderPasswordRequests(); }
 }
 
-async function loadRooms(){ rooms = await api('GET', '/api/rooms'); }
+// ห้องจะ "ไม่ว่าง" เฉพาะตอนที่มีการประชุมทับช่วงเวลานั้นจริงๆ ไม่ใช่ว่าเคยถูกจองแล้ว
+// ไม่ว่างตลอดไป (บั๊กเดิม) — ใช้สำหรับหน้าแรก/Dashboard แอดมิน จึงเช็คแบบ "ตอนนี้
+// เดี๋ยวนี้" (ช่วงเวลาสั้นๆ 1 นาทีเริ่มจากเวลาปัจจุบัน) ว่าห้องไหนมีประชุมอยู่จริงๆ
+function pad2(n){ return String(n).padStart(2, '0'); }
+
+async function loadRooms(){
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const t1 = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  const later = new Date(now.getTime() + 60000);
+  const t2 = `${pad2(later.getHours())}:${pad2(later.getMinutes())}`;
+  rooms = await api('GET', `/api/rooms?date=${dateStr}&startTime=${t1}&endTime=${t2}`);
+}
+
+// สถานะห้องตามวัน/เวลาที่เลือกอยู่ในฟอร์มสร้าง/แก้ไขการประชุม — เรียกใหม่ทุกครั้งที่
+// ผู้ใช้เปลี่ยนวันที่/เวลาเริ่ม/เวลาจบ (ดู onchange ที่ f-date/f-time/f-end-time)
+async function loadRoomsForForm(){
+  const date = document.getElementById('f-date').value;
+  const startTime = document.getElementById('f-time').value;
+  const endTime = document.getElementById('f-end-time').value;
+
+  if (!date || !startTime) { formRooms = rooms.map(r => ({ ...r, status: 'unknown' })); renderRoomSelect(); return; }
+
+  const qs = new URLSearchParams({ date, startTime });
+  if (endTime) qs.set('endTime', endTime);
+  if (editingMeetingId) qs.set('excludeMeetingId', editingMeetingId);
+
+  try {
+    formRooms = await api('GET', `/api/rooms?${qs.toString()}`);
+  } catch (e) {
+    formRooms = rooms.map(r => ({ ...r, status: 'unknown' })); // เรียกไม่สำเร็จ ยังมีห้องให้เลือกอยู่ (เช็คซ้ำอีกทีตอนกดบันทึกฝั่งเซิร์ฟเวอร์)
+  }
+  renderRoomSelect();
+}
+
+// วาด dropdown เลือกห้องจาก formRooms — ไม่โชว์ห้องที่ไม่ว่างช่วงเวลานี้ (ยกเว้นห้อง
+// เดิมของการประชุมที่กำลังแก้ไขอยู่ จะได้เลือกคงห้องเดิมไว้ได้แม้จะ "ไม่ว่าง" เพราะ
+// ไปชนกับการจองของตัวเอง)
+function renderRoomSelect(){
+  const roomSelect = document.getElementById('f-room');
+  if (!roomSelect) return;
+  const editing = editingMeetingId ? meetings.find(x => x.id === editingMeetingId) : null;
+  const keepRoom = editing ? formRooms.find(r => r.id === editing.room) : null;
+  const selectable = formRooms.filter(r => r.status !== 'busy' || (keepRoom && r.id === keepRoom.id));
+
+  roomSelect.innerHTML = selectable.map(r => {
+    const label = (keepRoom && r.id === keepRoom.id) ? 'ห้องเดิม' : (r.status === 'unknown' ? 'เลือกวัน/เวลาก่อน' : 'ว่าง');
+    return `<option value="${r.id}">${r.name} - ${label} (จุ ${r.capacity} คน)</option>`;
+  }).join('') || `<option value="">ไม่มีห้องว่างช่วงเวลานี้</option>`;
+
+  if (keepRoom) roomSelect.value = keepRoom.id;
+}
 async function loadMeetings(){ meetings = await api('GET', '/api/meetings'); }
 async function loadNotifications(){ notifications = await api('GET', '/api/notifications'); updateBellDot(); }
 async function loadUsers(){ allUsers = await api('GET', '/api/users'); }
@@ -995,7 +1089,26 @@ async function toggleNotifPanel(){
    หลักการเดียวกับแอปทั่วไป: มี .view เดียวที่ active อยู่ ณ เวลาหนึ่ง
    ก่อนแสดงผลแต่ละหน้า จะดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์มาก่อนเสมอ
 ========================================================================== */
-async function navigateTo(viewId){
+// ==========================================================================
+// ประวัติการนำทาง (view history) — ใช้กับปุ่ม "ย้อนกลับ" ให้กลับไปหน้าที่มาจริงๆ
+// แทนที่จะพาไปหน้าตายตัวเหมือนเดิม (เช่น ปุ่มย้อนกลับในหน้ารายละเอียดเคยพาไปหน้า
+// "การประชุม" เสมอ ไม่ว่าจะเปิดมาจากหน้าแรก/ประวัติ/การประชุมก็ตาม)
+//   - navigateTo ปกติ (ไม่ได้มาจากปุ่มย้อนกลับ) จะ push หน้าปัจจุบันเข้า stack ก่อนเปลี่ยน
+//   - การสลับ "แท็บหลัก" ผ่านเมนูด้านล่าง/ด้านข้าง (resetHistory:true) จะล้าง stack
+//     ใหม่ เพราะถือเป็นจุดเริ่มต้นใหม่ ไม่ใช่การ "เจาะลึก" เข้าไปจากหน้าปัจจุบัน
+//   - goBack() pop หน้าล่าสุดออกจาก stack แล้วพาไปที่นั่น ถ้า stack ว่าง (เช่น เปิด
+//     แอปมาที่หน้านี้ตรงๆ) ค่อย fallback ไปหน้าที่ระบุ
+// ==========================================================================
+let viewHistory = [];
+
+async function navigateTo(viewId, opts = {}){
+  const currentView = document.querySelector('.view.active');
+  const currentId = currentView ? currentView.id : null;
+  if (!opts.fromBack && currentId && currentId !== viewId){
+    if (opts.resetHistory) { viewHistory = []; }
+    else { viewHistory.push(currentId); }
+  }
+
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(viewId).classList.add('active');
   document.getElementById('content').scrollTop = 0;
@@ -1029,6 +1142,18 @@ async function navigateTo(viewId){
     renderUsersList(); renderPasswordRequests(); renderPendingAccounts();
   }
   if (viewId === 'report-view') await loadReportIntoForm();
+}
+
+// กดปุ่ม "ย้อนกลับ" (หน้ารายละเอียด/แก้ไขการประชุม/รายงาน ฯลฯ) ให้กลับไปหน้าที่มา
+// จริงๆ ดู viewHistory stack ด้านบน — ถ้าไม่มีประวัติเลย (เช่น เปิดแอปมาที่หน้านี้ตรงๆ)
+// ค่อย fallback ไปหน้าที่ระบุไว้
+function goBack(fallbackViewId){
+  const prev = viewHistory.pop();
+  if (prev && document.getElementById(prev)) {
+    navigateTo(prev, { fromBack: true });
+  } else {
+    navigateTo(fallbackViewId || 'home-view', { resetHistory: true });
+  }
 }
 
 /* ==========================================================================
@@ -1117,7 +1242,7 @@ function applyLoginResult(result){
     el.classList.toggle('hidden-admin-only', currentRole !== 'admin');
   });
 
-  navigateTo('home-view');
+  navigateTo('home-view', { resetHistory: true });
 }
 
 function logout(){
@@ -1128,7 +1253,7 @@ function logout(){
   try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (e) { /* เช่นเดียวกัน */ }
   document.getElementById('bottom-nav').style.display = 'none';
   document.getElementById('sidebar-nav').style.display = 'none';
-  navigateTo('login-view');
+  navigateTo('login-view', { resetHistory: true });
 }
 
 // ตอนเปิดเว็บ (หรือรีเฟรช) เช็คว่ามี token เดิมเก็บไว้ไหม ถ้ามีลองขอข้อมูลผู้ใช้
@@ -1339,9 +1464,10 @@ function renderHistoryList(){
 ========================================================================== */
 function renderMeetingsList(){
   const el = document.getElementById('meetings-list');
-  // ไม่โชว์การประชุมที่ "เสร็จสิ้นแล้ว" ในรายการหลัก (ถูก archive อัตโนมัติเมื่อหมดเวลา)
-  // ยังดูย้อนหลังได้เสมอในแท็บ "ประวัติการประชุม" (history-view)
-  const activeMeetings = meetings.filter(m => m.status !== 'completed');
+  // โชว์แค่การประชุมที่ "จะมาถึง" เท่านั้น — ไม่เอาที่เสร็จสิ้นแล้ว (ถูก archive
+  // อัตโนมัติเมื่อหมดเวลา) หรือถูกยกเลิกไปแล้วมาปนในรายการหลัก ยังดูย้อนหลังได้เสมอ
+  // ในแท็บ "ประวัติการประชุม" (history-view) ซึ่งโชว์ทุกสถานะตามเดิม
+  const activeMeetings = meetings.filter(m => m.status !== 'completed' && m.status !== 'cancelled');
 
   const totalPages = Math.max(1, Math.ceil(activeMeetings.length / PAGE_SIZE));
   meetingsPage = Math.min(Math.max(1, meetingsPage), totalPages);
@@ -1429,9 +1555,9 @@ async function openMeetingDetail(id){
   await navigateTo('meeting-detail-view');
 }
 
-// สร้าง QR Code จริงฝั่ง browser ด้วยไลบรารี qrcode (โหลดจาก CDN ใน <head>)
-// เข้ารหัสเป็นลิงก์ /checkin/<meetingId> ของเว็บนี้เอง — สแกนแล้วเปิดหน้าเช็คอิน
-// สาธารณะได้ทันที ไม่ต้อง login (ดู public-checkin-view + initPublicCheckin())
+// สร้าง QR Code จริงฝั่ง browser ด้วยไลบรารีที่โฮสต์เองในเว็บนี้ (vendor/qrcode-local.js
+// ไม่ได้พึ่ง CDN ภายนอกแล้ว) เข้ารหัสเป็นลิงก์ /checkin/<meetingId> ของเว็บนี้เอง —
+// สแกนแล้วเปิดหน้าเช็คอินสาธารณะได้ทันที ไม่ต้อง login (ดู public-checkin-view + initPublicCheckin())
 function toggleDetailQr(meetingId){
   const box = document.getElementById('detail-qr-box');
   const wrap = document.getElementById('detail-qr-canvas-wrap');
@@ -1444,10 +1570,10 @@ function toggleDetailQr(meetingId){
     const url = `${location.origin}/checkin/${meetingId}`;
     if (window.QRCode && QRCode.toCanvas){
       QRCode.toCanvas(canvas, url, { width: 200, margin: 1 }, function (error) {
-        if (error) wrap.innerHTML = `<p class="sub">สร้าง QR ไม่สำเร็จ</p>`;
+        if (error) wrap.innerHTML = `<p class="sub">สร้าง QR ไม่สำเร็จ ลองรีเฟรชหน้าเว็บแล้วลองใหม่</p>`;
       });
     } else {
-      wrap.innerHTML = `<p class="sub">ไม่สามารถโหลดไลบรารี QR ได้ (ต้องต่ออินเทอร์เน็ตเพื่อโหลดจาก CDN)</p>`;
+      wrap.innerHTML = `<p class="sub">ไม่สามารถโหลดระบบสร้าง QR ได้ ลองรีเฟรชหน้าเว็บแล้วลองใหม่</p>`;
     }
   }
 }
@@ -1459,7 +1585,7 @@ async function cancelMeeting(id){
   } catch (e) {
     showToast('เกิดข้อผิดพลาด: ' + e.message);
   }
-  navigateTo('meetings-view');
+  navigateTo('meetings-view', { resetHistory: true });
 }
 
 function editMeeting(id){
@@ -1473,11 +1599,6 @@ function editMeeting(id){
 function openReportForm(meetingId){
   reportMeetingId = meetingId;
   navigateTo('report-view');
-}
-
-function backFromReportForm(){
-  if (reportMeetingId) { openMeetingDetail(reportMeetingId); }
-  else { navigateTo('meetings-view'); }
 }
 
 async function loadReportIntoForm(){
@@ -1566,16 +1687,12 @@ function resetCreateForm(){
   document.getElementById('f-confidential').value = editing ? editing.confidential : 'ทั่วไป';
   document.getElementById('f-chair').value = editing ? editing.chairName : '';
 
-  const roomSelect = document.getElementById('f-room');
-  const keepRoom = editing ? rooms.find(r => r.id === editing.room) : null;
-  const freeRooms = rooms.filter(r => r.status === 'free' || (keepRoom && r.id === keepRoom.id));
-  roomSelect.innerHTML = freeRooms
-    .map(r => `<option value="${r.id}">${r.name} - ${r.status==='free' ? 'ว่าง' : 'ห้องเดิม'} (จุ ${r.capacity} คน)</option>`).join('')
-    || `<option value="">ไม่มีห้องว่าง</option>`;
-  if (keepRoom) roomSelect.value = keepRoom.id;
-
   const typeVal = editing ? editing.type : 'Onsite';
   pickSeg('type-seg', document.querySelector(`#type-seg button[data-val="${typeVal}"]`));
+
+  // โหลดสถานะห้องตามวัน/เวลาที่เพิ่งตั้งค่าไว้ข้างบน (ไม่ใช่สถานะห้อง "ตอนนี้เดี๋ยวนี้"
+  // แบบหน้าแรก) — ดูเฉพาะช่วงเวลานี้ว่าห้องไหนว่างจริง กันจองซ้อนกับการประชุมอื่น
+  loadRoomsForForm();
 }
 
 function pickSeg(groupId, btn){
@@ -1623,7 +1740,7 @@ async function submitCreateMeeting(){
       showToast(needsRoom ? 'ส่งคำขอจองห้องแล้ว รอแอดมินอนุมัติ' : 'สร้างการประชุมออนไลน์สำเร็จ');
     }
     editingMeetingId = null;
-    navigateTo('meetings-view');
+    navigateTo('meetings-view', { resetHistory: true });
   } catch (e) {
     showToast('เกิดข้อผิดพลาด: ' + e.message);
     btnLabel.textContent = isEditing ? 'บันทึกการแก้ไข' : 'ส่งคำขอจองและสร้างการประชุม';
